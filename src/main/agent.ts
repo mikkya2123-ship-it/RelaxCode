@@ -45,6 +45,7 @@ import {
   type ToolResult
 } from './tools'
 import { parseTextToolCalls } from './textToolCalls'
+import { callSignature, MUTATING_TOOLS, repeatBlock, repeatNotice, type CallMemory } from './call-loop'
 import { createExchangeLog } from './exchange-log'
 import { logEvent } from './logger'
 import { dangerReason, t } from './i18n'
@@ -1009,6 +1010,11 @@ export async function runAgent(
     // an answer and without an explanation.
     let stopReason: 'answered' | 'empty-step' | 'step-limit' | 'aborted' = 'step-limit'
 
+    // Identical calls already made, keyed by tool + arguments, plus a counter
+    // bumped by every successful write so a retest after an edit stays allowed.
+    const callMemory = new Map<string, CallMemory>()
+    let mutations = 0
+
     for (let step = 1; step <= settings.agent.maxSteps; step += 1) {
       if (abort.signal.aborted) {
         stopReason = 'aborted'
@@ -1089,7 +1095,26 @@ export async function runAgent(
           args: call.args,
           step
         })
-        const result = await executeCall(call)
+        const signature = callSignature(call.name, call.args)
+        const seen = callMemory.get(signature)
+        const blocked = repeatBlock(seen, mutations, call.name)
+        const result = blocked
+          ? {
+              ok: false,
+              summary: `skipped repeated call: ${call.name}`,
+              detail: repeatNotice(call.name, seen as CallMemory)
+            }
+          : await executeCall(call)
+        if (blocked) {
+          logEvent('debug', `repeated ${call.name} call skipped (${seen?.attempts ?? 0} before)`)
+        } else if (result.ok && MUTATING_TOOLS.has(call.name)) {
+          mutations += 1
+        }
+        callMemory.set(signature, {
+          attempts: (seen?.attempts ?? 0) + 1,
+          ok: result.ok,
+          mutations
+        })
         lastToolOk = result.ok
         emit({
           requestId,
