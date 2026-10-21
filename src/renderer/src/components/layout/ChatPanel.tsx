@@ -1,0 +1,610 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent
+} from 'react'
+import {
+  ArrowUp,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Settings,
+  Square,
+  Trash2
+} from 'lucide-react'
+import type { ChatMode } from '@shared/ipc'
+import { useUiStore } from '@/stores/ui'
+import { useChatStore } from '@/stores/chat'
+import { useSettingsStore } from '@/stores/settings'
+import { toast } from '@/stores/toast'
+import { useT, useTranslateError } from '@/lib/i18n'
+import { catalogForBaseUrl } from '@/lib/provider-catalog'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { ProviderLogo } from '@/components/ui/provider-logo'
+import { ModelIcon } from '@/components/ui/model-icon'
+import { MarqueeText } from '@/components/ui/marquee-text'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { ToolCallCard } from '@/components/chat/ToolCallCard'
+import { AnswerWithCitations, WebSourcesFooter } from '@/components/chat/WebSearchCard'
+import { ReasoningCard } from '@/components/chat/ReasoningCard'
+import { ContextMeter } from '@/components/chat/ContextMeter'
+import { ThinkingMenu } from '@/components/chat/ThinkingMenu'
+import { TodoPanel } from '@/components/chat/TodoPanel'
+import { ProcessPanel } from '@/components/chat/ProcessPanel'
+import { ApprovalBar } from '@/components/chat/ApprovalBar'
+import { AskUserBar } from '@/components/chat/AskUserBar'
+import { cn } from '@/lib/utils'
+
+const MODES: ChatMode[] = ['chat', 'agent', 'plan']
+
+/** Local time of a message, 24-hour, without seconds. */
+const formatTime = (at: number): string =>
+  new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+
+const iconButton =
+  'rounded-md p-1 text-tertiary transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-tertiary'
+
+export function ChatPanel(): JSX.Element {
+  const open = useUiStore((s) => s.chatOpen)
+  const openSettings = useUiStore((s) => s.openSettings)
+  const messages = useChatStore((s) => s.messages)
+  const streaming = useChatStore((s) => s.streaming)
+  const mode = useChatStore((s) => s.mode)
+  const setMode = useChatStore((s) => s.setMode)
+  const thinking = useChatStore((s) => s.thinking)
+  const setThinking = useChatStore((s) => s.setThinking)
+  const todos = useChatStore((s) => s.todos)
+  const processes = useChatStore((s) => s.processes)
+  const pendingApproval = useChatStore((s) => s.pendingApproval)
+  const pendingQuestion = useChatStore((s) => s.pendingQuestion)
+  const notice = useChatStore((s) => s.notice)
+  const contextTokens = useChatStore((s) => s.contextTokens)
+  const saved = useChatStore((s) => s.saved)
+  const send = useChatStore((s) => s.send)
+  const stop = useChatStore((s) => s.stop)
+  const stopProcess = useChatStore((s) => s.stopProcess)
+  const respondApproval = useChatStore((s) => s.respondApproval)
+  const replyQuestion = useChatStore((s) => s.replyQuestion)
+  const chats = useChatStore((s) => s.chats)
+  const activeChatId = useChatStore((s) => s.activeChatId)
+  const newChat = useChatStore((s) => s.newChat)
+  const selectChat = useChatStore((s) => s.selectChat)
+  const deleteChat = useChatStore((s) => s.deleteChat)
+  const model = useSettingsStore((s) => s.settings?.model ?? null)
+  const save = useSettingsStore((s) => s.save)
+  const models = useSettingsStore((s) => s.models)
+  const modelsState = useSettingsStore((s) => s.modelsState)
+  const modelsError = useSettingsStore((s) => s.modelsError)
+  const loadModels = useSettingsStore((s) => s.loadModels)
+  const ui = useSettingsStore((s) => s.settings?.ui)
+  const chatSettings = useSettingsStore((s) => s.settings?.chat)
+  const tokenSaving = useSettingsStore((s) => s.settings?.agent.tokenSaving ?? 'off')
+  // The logo of the provider the models come from; stable by reference.
+  const providerEntry = useSettingsStore((s) => catalogForBaseUrl(s.settings?.baseUrl))
+  // What the endpoint says about the picked model (reasoning support, mostly).
+  const modelInfo = models.find((entry) => entry.id === model)
+  const chatWidth = ui?.chatWidth ?? 384
+  const sendOnEnter = chatSettings?.sendOnEnter ?? true
+  const autoScroll = chatSettings?.autoScroll ?? true
+  const [draft, setDraft] = useState('')
+  const [modelOpen, setModelOpen] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const modelListRef = useRef<HTMLDivElement>(null)
+  const t = useT()
+  const translateError = useTranslateError()
+
+  const activeChat = chats.find((chat) => chat.id === activeChatId)
+  const activeTitle = activeChat?.title || t('chat.newChat')
+  // The main process answers one conversation at a time.
+  const streamsElsewhere = !streaming && chats.some((chat) => chat.streaming)
+  const onlyEmptyChat = chats.length === 1 && messages.length === 0
+
+  useEffect(() => {
+    if (!autoScroll) return
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, todos, processes, pendingApproval, pendingQuestion, activeChatId, autoScroll])
+
+  // Warm the model list as soon as a connection is known, so the picker opens
+  // with its items already there instead of growing under the cursor.
+  const connectionKey = useSettingsStore((s) =>
+    s.settings ? `${s.settings.activeProviderId}|${s.settings.baseUrl}|${s.settings.hasApiKey}` : ''
+  )
+  useEffect(() => {
+    if (connectionKey) void loadModels()
+  }, [connectionKey, loadModels])
+
+  // With a long list the sheet opens at the model in use, not at the first one.
+  useEffect(() => {
+    if (!modelOpen) return
+    const timer = window.setTimeout(() => {
+      modelListRef.current
+        ?.querySelector('[data-current="true"]')
+        ?.scrollIntoView({ block: 'nearest' })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [modelOpen, models])
+
+  let noticeText: string | null = null
+  let noticeWarning = false
+  if (notice) {
+    switch (notice.kind) {
+      case 'text-call-fallback':
+        noticeText = t('chat.notice.textCall', { tools: notice.tools.join(', ') })
+        break
+      case 'no-tool-calls':
+        noticeText = t('chat.notice.noToolCalls')
+        noticeWarning = true
+        break
+      case 'unverified-result':
+        noticeText = t('chat.notice.unverified')
+        noticeWarning = true
+        break
+      case 'no-answer':
+        noticeText = t(
+          notice.reason === 'step-limit' ? 'chat.notice.noAnswerLimit' : 'chat.notice.noAnswerEmpty',
+          { steps: notice.steps }
+        )
+        noticeWarning = true
+        break
+      case 'param-dropped':
+        noticeText = t(
+          notice.param === 'reasoning'
+            ? 'chat.notice.paramDroppedReasoning'
+            : notice.param === 'sampling'
+              ? 'chat.notice.paramDroppedSampling'
+              : 'chat.notice.paramDroppedOther'
+        )
+        noticeWarning = true
+        break
+      case 'rate-limit-retry':
+      case 'server-retry':
+        noticeText = t(
+          notice.kind === 'rate-limit-retry' ? 'chat.notice.rateLimit' : 'chat.notice.serverRetry',
+          { s: notice.seconds, n: notice.attempt, max: notice.maxAttempts }
+        )
+        break
+    }
+  }
+
+  const handleSend = (): void => {
+    if (streaming || streamsElsewhere || pendingApproval || pendingQuestion) return
+    if (!model) {
+      openSettings()
+      return
+    }
+    const text = draft
+    if (!text.trim()) return
+    setDraft('')
+    void send(text)
+  }
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    // Either Enter sends and Ctrl+Enter breaks the line, or the other way round.
+    if (sendOnEnter || event.ctrlKey || event.metaKey) {
+      event.preventDefault()
+      handleSend()
+    }
+  }
+
+  const handlePickModel = (id: string): void => {
+    void save({ model: id }).then((result) => {
+      if (!result.ok) toast(t('chat.model.saveFailed'), result.error, 'error')
+    })
+  }
+
+  return (
+    <aside
+      style={{ width: open ? chatWidth : 0 }}
+      className={cn(
+        'relative h-full shrink-0 overflow-hidden bg-background transition-[width] duration-200 ease-out',
+        open && 'border-l border-border'
+      )}
+      aria-hidden={!open}
+    >
+      <div className="flex h-full flex-col" style={{ width: chatWidth }}>
+        <div className="flex h-9 shrink-0 items-center gap-1 px-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                data-testid="chat-list"
+                title={t('chat.newChat')}
+                className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-muted-foreground transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+              >
+                <span className="max-w-[190px] truncate">{activeTitle}</span>
+                <ChevronDown className="size-3 shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[300px]">
+              <DropdownMenuItem onSelect={() => newChat()} className="gap-2 text-[12px]">
+                <Plus className="size-3.5" />
+                {t('chat.newChat')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {chats.map((chat) => (
+                <DropdownMenuItem
+                  key={chat.id}
+                  onSelect={() => selectChat(chat.id)}
+                  className="gap-2 text-[12px]"
+                >
+                  <span
+                    className={cn(
+                      'min-w-0 flex-1 truncate',
+                      chat.id === activeChatId && 'font-medium text-foreground'
+                    )}
+                  >
+                    {chat.title || t('chat.newChat')}
+                  </span>
+                  {chat.streaming && (
+                    <Loader2 className="size-3 shrink-0 animate-spin text-tertiary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="ml-auto flex items-center gap-0.5">
+            <ContextMeter
+              used={contextTokens ?? 0}
+              limit={modelInfo?.contextLength ?? null}
+              saved={saved}
+              streaming={streaming}
+            />
+            <button
+              type="button"
+              data-testid="chat-delete"
+              title={t('chat.deleteChat')}
+              aria-label={t('chat.deleteChat')}
+              disabled={onlyEmptyChat}
+              onClick={() => deleteChat(activeChatId)}
+              className={cn(iconButton, 'hover:text-destructive')}
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              data-testid="chat-new"
+              title={t('chat.newChat')}
+              aria-label={t('chat.newChat')}
+              onClick={() => newChat()}
+              className={iconButton}
+            >
+              <Plus className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {messages.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8">
+            <p className="max-w-[260px] text-center text-[13px] leading-relaxed text-muted-foreground">
+              {t('chat.empty')}
+            </p>
+            {!model && (
+              <Button variant="default" size="sm" onClick={openSettings}>
+                {t('chat.configure')}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+            <div className="flex flex-col gap-4">
+              {messages.map((message) =>
+                message.role === 'user' ? (
+                  <div key={message.id} className="flex max-w-[85%] flex-col items-end gap-0.5 self-end">
+                    <div className="whitespace-pre-wrap break-words rounded-2xl bg-foreground/[0.06] px-3.5 py-2 text-[13px] leading-relaxed">
+                      {message.parts
+                        .filter((part) => part.kind === 'text')
+                        .map((part, index) => (
+                          <span key={index}>{part.kind === 'text' ? part.text : null}</span>
+                        ))}
+                    </div>
+                    {ui?.showTimestamps && message.at !== undefined && (
+                      <span className="pr-1 text-[10px] tabular-nums text-tertiary">
+                        {formatTime(message.at)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    key={message.id}
+                    className="flex w-full flex-col gap-2 text-[13px] leading-relaxed"
+                  >
+                    {message.parts.map((part, index) =>
+                      part.kind === 'text' ? (
+                        <p key={index} className="whitespace-pre-wrap break-words">
+                          <AnswerWithCitations text={part.text} parts={message.parts} />
+                        </p>
+                      ) : part.kind === 'reasoning' ? (
+                        <ReasoningCard
+                          key={`reasoning-${index}`}
+                          part={part}
+                          live={message.status === 'streaming' && index === message.parts.length - 1}
+                          defaultOpen={ui?.reasoningOpen ?? false}
+                        />
+                      ) : (
+                        <ToolCallCard
+                          key={`${part.callId}-${index}`}
+                          part={part}
+                          defaultExpanded={ui?.toolDetailsOpen ?? false}
+                        />
+                      )
+                    )}
+                    <WebSourcesFooter parts={message.parts} />
+                    {message.status === 'streaming' && message.parts.length === 0 && (
+                      <p className="text-tertiary">
+                        <span className="animate-pulse">•••</span>
+                      </p>
+                    )}
+                    {message.status === 'error' && (
+                      <p
+                        data-testid="chat-error"
+                        className="whitespace-pre-wrap break-words text-destructive"
+                      >
+                        {translateError(message.error ?? '')}
+                      </p>
+                    )}
+                    {message.status === 'done' &&
+                      message.parts.length > 0 &&
+                      ((ui?.showTimestamps && message.at !== undefined) ||
+                        (ui?.showTokenUsage &&
+                          (message.promptTokens !== undefined ||
+                            message.completionTokens !== undefined))) && (
+                        <div className="flex items-center gap-2 text-[10px] tabular-nums text-tertiary">
+                          {ui?.showTimestamps && message.at !== undefined && (
+                            <span>{formatTime(message.at)}</span>
+                          )}
+                          {ui?.showTokenUsage && (
+                            <span>
+                              {t('chat.tokens', {
+                                input: message.promptTokens ?? 0,
+                                output: message.completionTokens ?? 0
+                              })}
+                            </span>
+                          )}
+                          {ui?.showTokenUsage &&
+                            message.reasoningTokens !== undefined &&
+                            message.reasoningTokens > 0 && (
+                              <span>
+                                {t('chat.reasoning.tokens', { t: message.reasoningTokens })}
+                              </span>
+                            )}
+                        </div>
+                      )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex shrink-0 flex-col gap-2 p-3 pt-0">
+          {pendingApproval && (
+            <ApprovalBar request={pendingApproval} onDecision={respondApproval} />
+          )}
+          {pendingQuestion && <AskUserBar question={pendingQuestion} onReply={replyQuestion} />}
+          <TodoPanel todos={todos} />
+          {ui?.serversPanel !== false && (
+            <ProcessPanel processes={processes} onStop={stopProcess} />
+          )}
+
+          {noticeText && (
+            <p
+              data-testid="chat-notice"
+              className={cn(
+                'flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground',
+                noticeWarning && 'text-amber-600 dark:text-amber-500'
+              )}
+            >
+              {noticeWarning ? (
+                <CircleAlert className="size-3 shrink-0" />
+              ) : (
+                <Loader2 className="size-3 shrink-0 animate-spin" />
+              )}
+              {noticeText}
+            </p>
+          )}
+
+          <div className="rounded-[12px] border border-input bg-card shadow-xs transition-colors duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
+            <Textarea
+              rows={2}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                pendingApproval
+                  ? t('chat.approval.awaiting')
+                  : streamsElsewhere
+                    ? t('chat.busy')
+                    : t('chat.placeholder')
+              }
+              className="max-h-[200px] min-h-[56px] resize-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0"
+            />
+            <div className="flex items-center justify-between gap-2 px-2 pb-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <DropdownMenu
+                  open={modelOpen}
+                  onOpenChange={(next) => {
+                    setModelOpen(next)
+                    if (next) void loadModels()
+                  }}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="chat-model"
+                      title={model ?? t('chat.modelNotSelected')}
+                      className={cn(
+                        'flex w-[160px] min-w-[112px] shrink items-center gap-1 rounded-md border border-input bg-card px-1.5 py-1 text-[11px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+                        // While the list is open the chip and the panel read as one sheet.
+                        modelOpen && 'rounded-t-none'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        {model ?? t('chat.modelNotSelected')}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          'size-3 shrink-0 transition-transform duration-150',
+                          modelOpen && 'rotate-180'
+                        )}
+                      />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    // The sheet is anchored by its own height, so a list that
+                    // changes size while open has to be measured again.
+                    key={`models-${models.length}`}
+                    align="start"
+                    side="top"
+                    sideOffset={-1}
+                    collisionPadding={12}
+                    // The chip shrinks with the panel, so the sheet follows it
+                    // instead of a fixed width — together they read as one.
+                    className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[128px] rounded-t-xl rounded-b-none border-b-0 p-0 shadow-none"
+                  >
+                    {/* The list is capped — a long model list scrolls instead of
+                        covering the window, and the actions stay reachable. */}
+                    <div
+                      ref={modelListRef}
+                      className="max-h-[240px] overflow-y-auto overscroll-contain p-1"
+                    >
+                      <DropdownMenuLabel className="flex items-center gap-1.5 px-2 text-[11px] font-normal text-tertiary">
+                        {providerEntry && <ProviderLogo id={providerEntry.id} className="size-3.5" />}
+                        {t('chat.model.choose')}
+                      </DropdownMenuLabel>
+                      {modelsState === 'loading' && (
+                        <div className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-tertiary">
+                          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                          {t('chat.models.loading')}
+                        </div>
+                      )}
+                      {modelsState !== 'loading' && models.length === 0 && (
+                        <div className="px-2 py-1.5 text-[11px] text-tertiary">
+                          <span className="block">{t('chat.models.empty')}</span>
+                          {modelsState === 'error' && modelsError && (
+                            <span className="mt-0.5 block break-all text-destructive">
+                              {translateError(modelsError)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {models.map((entry) => (
+                        <DropdownMenuItem
+                          key={entry.id}
+                          data-current={entry.id === model ? 'true' : undefined}
+                          onSelect={() => handlePickModel(entry.id)}
+                          className="gap-1.5 px-2 py-1.5 text-[12px]"
+                          title={entry.tools ? t('chat.model.tools', { id: entry.id }) : entry.id}
+                        >
+                          <Check
+                            className={cn(
+                              'size-3 shrink-0',
+                              entry.id === model ? 'opacity-100' : 'opacity-0'
+                            )}
+                          />
+                          <ModelIcon id={entry.id} />
+                          <MarqueeText className="min-w-0 flex-1">{entry.id}</MarqueeText>
+                          {entry.free && (
+                            <Badge variant="success" className="shrink-0">
+                              {t('chat.model.free')}
+                            </Badge>
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </div>
+                    <div className="border-t border-border p-1">
+                      <DropdownMenuItem
+                        onSelect={() => void loadModels(true)}
+                        className="gap-1.5 px-2 text-[12px]"
+                      >
+                        <RefreshCw className="size-3 shrink-0" />
+                        <span className="truncate">{t('chat.models.refresh')}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => openSettings()}
+                        className="gap-1.5 px-2 text-[12px]"
+                      >
+                        <Settings className="size-3 shrink-0" />
+                        <span className="truncate">{t('chat.settings.open')}</span>
+                      </DropdownMenuItem>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <div
+                  data-testid="chat-modes"
+                  className="flex items-center gap-0.5 rounded-md bg-foreground/[0.05] p-0.5"
+                >
+                  {MODES.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setMode(item)}
+                      className={cn(
+                        'rounded-[5px] px-1.5 py-0.5 text-[11px] transition-colors duration-100',
+                        item === mode
+                          ? 'bg-card text-foreground shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {t(`chat.mode.${item}` as 'chat.mode.chat')}
+                    </button>
+                  ))}
+                </div>
+
+                <ThinkingMenu
+                  level={thinking}
+                  info={modelInfo}
+                  saving={tokenSaving}
+                  live={streaming && thinking !== 'off'}
+                  onChange={setThinking}
+                />
+              </div>
+
+              {streaming ? (
+                <Button
+                  variant="default"
+                  size="icon-sm"
+                  data-testid="chat-send"
+                  aria-label={t('chat.stop')}
+                  className="shrink-0 rounded-full"
+                  onClick={stop}
+                >
+                  <Square className="size-3 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="icon-sm"
+                  data-testid="chat-send"
+                  disabled={!draft.trim() || streamsElsewhere}
+                  aria-label={t('chat.send')}
+                  className="shrink-0 rounded-full"
+                  onClick={handleSend}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  )
+}
