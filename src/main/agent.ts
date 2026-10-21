@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { app } from 'electron'
 import OpenAI from 'openai'
 import type {
   ApprovalDecision,
@@ -44,6 +45,7 @@ import {
   type ToolResult
 } from './tools'
 import { parseTextToolCalls } from './textToolCalls'
+import { createExchangeLog } from './exchange-log'
 import { logEvent } from './logger'
 import { dangerReason, t } from './i18n'
 
@@ -527,13 +529,21 @@ function isRetryableStepError(error: unknown): boolean {
 
 export async function runAgent(
   request: ChatSendRequest,
-  emit: (event: ChatEvent) => void,
+  send: (event: ChatEvent) => void,
   hooks: AgentHooks
 ): Promise<void> {
   const { requestId, mode } = request
+  // Every event passes through the recorder, so the report covers exactly what
+  // the app saw: the question, each tool and its answer, warnings, and errors.
+  const exchange = createExchangeLog(request, join(app.getPath('userData'), 'exchanges'))
+  const emit = (event: ChatEvent): void => {
+    exchange.record(event)
+    send(event)
+  }
   const settings = getSettings()
   const provider = activeProvider(settings)
   const apiKey = getApiKey(provider.id)
+  exchange.setTarget({ model: provider.model ?? '(не задана)', provider: provider.name, baseUrl: provider.baseUrl })
 
   if (!provider.model) {
     emit({ requestId, type: 'error', message: 'no-model' })
@@ -590,6 +600,7 @@ export async function runAgent(
   activeAbort = abort
 
   const systemPrompt = await buildSystemPrompt(mode, request, settings)
+  exchange.setSystemPrompt(systemPrompt)
   const toolDefs = toolsForMode(mode)
   const tools = toolDefs.map(openAiToolSchema)
 
