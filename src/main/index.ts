@@ -32,7 +32,9 @@ import {
 } from '@shared/ipc'
 import {
   addRecentWorkspace,
+  activeProvider,
   applySettingsPatch,
+  getApiKey,
   getPublicSettings,
   getSettings,
   importSettings,
@@ -78,6 +80,7 @@ import { logEvent } from './logger'
 import { t } from './i18n'
 import { parseMcpToolName } from '@shared/mcp'
 import type { ChatEvent } from '@shared/ipc'
+import type { AudioTranscribeResult } from '@shared/ipc'
 import { resolveUiReply, setUiWindow } from './ui-bridge'
 import { restoreProjectSnapshot } from './tools-project'
 
@@ -609,6 +612,54 @@ function registerIpc(): void {
     logEvent('info', `time travel: restored ${restored} files from snapshot ${name}`)
     return { ok: true, files: restored }
   })
+
+  // Push-to-talk: the recorded audio goes to the active provider's
+  // transcription endpoint (OpenAI-compatible /audio/transcriptions).
+  ipcMain.handle(
+    IPC.AUDIO_TRANSCRIBE,
+    async (_event, audio: ArrayBuffer): Promise<AudioTranscribeResult> => {
+      if (!(audio instanceof ArrayBuffer) || audio.byteLength < 512) {
+        return { ok: false, error: 'empty-recording' }
+      }
+      const settings = getSettings()
+      const provider = activeProvider(settings)
+      const apiKey = getApiKey(provider.id)
+      if (!apiKey) return { ok: false, error: 'no-key' }
+      const url = `${provider.baseUrl.replace(/\/$/, '')}/audio/transcriptions`
+
+      // whisper-1 is the OpenAI-compatible default; Groq-style providers want
+      // their own id, so a "model" complaint gets one retry.
+      for (const model of ['whisper-1', 'whisper-large-v3']) {
+        try {
+          const form = new FormData()
+          form.append('file', new Blob([audio], { type: 'audio/webm' }), 'dictation.webm')
+          form.append('model', model)
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}` },
+            body: form,
+            signal: AbortSignal.timeout(90000)
+          })
+          if (response.ok) {
+            const payload = (await response.json()) as { text?: unknown }
+            if (typeof payload.text === 'string' && payload.text.trim() !== '') {
+              return { ok: true, text: payload.text.trim() }
+            }
+            return { ok: false, error: 'empty-text' }
+          }
+          const body = (await response.text()).slice(0, 300)
+          // A different model id may fix it; anything else is final.
+          if (response.status !== 400 && response.status !== 404) {
+            return { ok: false, error: `HTTP ${response.status}: ${body}` }
+          }
+          if (!/model/i.test(body)) return { ok: false, error: `HTTP ${response.status}: ${body}` }
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) }
+        }
+      }
+      return { ok: false, error: 'provider-cannot-transcribe' }
+    }
+  )
 
   setChangeListener((dirs) => {
     mainWindow?.webContents.send(IPC.WORKSPACE_CHANGED, dirs)

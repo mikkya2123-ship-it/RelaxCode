@@ -1,56 +1,69 @@
 import { create } from 'zustand'
-import { dictationSupported, startDictation } from '@/lib/voice'
-import { useI18nStore } from '@/lib/i18n'
+import { recorderSupported, startRecording, type AudioSession } from '@/lib/voice'
+import { useI18nStore, translate } from '@/lib/i18n'
+import { toast } from './toast'
 
 /**
- * Push-to-talk state: hold the hotkey (or the mic button) and speak — every
- * finished phrase accumulates here; when listening stops, the composer takes
- * the text into the draft.
+ * Push-to-talk state: hold the hotkey (or the mic button) and speak; the
+ * recording is transcribed by the main process through the provider, and the
+ * finished text lands in the composer draft.
  */
 
 interface VoiceState {
+  /** The microphone is being recorded. */
   listening: boolean
-  /** Recognized phrases so far, joined into one line. */
+  /** Recording done; the audio is being transcribed. */
+  transcribing: boolean
+  /** The recognized text, ready for the composer to swallow. */
   text: string
-  /** True when this build has no speech backend at all. */
+  /** True when this build cannot record at all. */
   unsupported: boolean
-  start: () => boolean
+  start: () => Promise<void>
   stop: () => void
 }
 
-let controller: { stop: () => void } | null = null
+let session: AudioSession | null = null
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   listening: false,
+  transcribing: false,
   text: '',
-  unsupported: !dictationSupported(),
+  unsupported: !recorderSupported(),
 
-  start: () => {
-    if (get().listening || get().unsupported) return false
-    const locale = useI18nStore.getState().locale
-    const handle = startDictation(
-      locale === 'ru' ? 'ru-RU' : 'en-US',
-      (phrase) => {
-        set((state) => ({ text: state.text === '' ? phrase : `${state.text} ${phrase}` }))
-      },
-      () => {
-        // The backend ended on its own (silence timeout); close the session
-        // so the next press starts fresh.
-        if (get().listening) get().stop()
-      }
-    )
-    if (!handle) {
-      set({ unsupported: true })
-      return false
+  start: async () => {
+    if (get().listening || get().transcribing || get().unsupported) return
+    try {
+      session = await startRecording()
+      set({ listening: true, text: '' })
+    } catch {
+      toast(translate(useI18nStore.getState().locale, 'chat.voice.denied'))
     }
-    controller = handle
-    set({ listening: true, text: '' })
-    return true
   },
 
   stop: () => {
-    controller?.stop()
-    controller = null
-    set({ listening: false })
+    if (!get().listening || !session) {
+      session = null
+      set({ listening: false })
+      return
+    }
+    const current = session
+    session = null
+    set({ listening: false, transcribing: true })
+    void current.stop().then(async (audio) => {
+      if (!audio || audio.byteLength < 512) {
+        set({ transcribing: false })
+        return
+      }
+      const result = await window.relaxcode.audio.transcribe(audio)
+      if (!result.ok) {
+        toast(
+          translate(useI18nStore.getState().locale, 'chat.voice.error', { error: result.error ?? '' })
+        )
+      }
+      set({
+        transcribing: false,
+        ...(result.ok && result.text ? { text: result.text } : {})
+      })
+    })
   }
 }))

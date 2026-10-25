@@ -24,6 +24,7 @@ import {
   type ReadFileResult,
   type ScreenSourceResult,
   type SettingsFileResult,
+  type AudioTranscribeResult,
   type SettingsPatch,
   type SettingsSaveResult,
   type SteerResult,
@@ -133,6 +134,11 @@ const api = {
     /** Time travel: restore the workspace to a run snapshot. */
     restore: (name: string): Promise<{ ok: boolean; files: number }> =>
       ipcRenderer.invoke(IPC.SNAPSHOT_RESTORE, name)
+  },
+  audio: {
+    /** Push-to-talk: transcribe a recording through the active provider. */
+    transcribe: (audio: ArrayBuffer): Promise<AudioTranscribeResult> =>
+      ipcRenderer.invoke(IPC.AUDIO_TRANSCRIBE, audio)
   },
   chat: {
     send: (request: ChatSendRequest): Promise<void> => ipcRenderer.invoke(IPC.CHAT_SEND, request),

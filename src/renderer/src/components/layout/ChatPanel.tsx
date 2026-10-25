@@ -131,12 +131,11 @@ export function ChatPanel(): JSX.Element {
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const voiceListening = useVoiceStore((s) => s.listening)
+  const voiceTranscribing = useVoiceStore((s) => s.transcribing)
   const voiceUnsupported = useVoiceStore((s) => s.unsupported)
   const voiceText = useVoiceStore((s) => s.text)
   const voiceStart = useVoiceStore((s) => s.start)
   const voiceStop = useVoiceStore((s) => s.stop)
-  const voiceTextRef = useRef('')
-  voiceTextRef.current = voiceText
   const [modelOpen, setModelOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const modelListRef = useRef<HTMLDivElement>(null)
@@ -284,14 +283,13 @@ export function ChatPanel(): JSX.Element {
     setDraftAttachments((prev) => prev.filter((item) => item.attachment.id !== id))
   }
 
-  // When dictation stops, its text lands in the draft (kept once via ref).
+  // Dictation finished: its text lands in the draft, kept once.
   useEffect(() => {
-    if (voiceListening || voiceTextRef.current === '') return
-    const heard = voiceTextRef.current
-    voiceTextRef.current = ''
-    setDraft((current) => (current.trim() === '' ? heard : `${current.trimEnd()} ${heard}`))
+    if (voiceText === '' || voiceListening || voiceTranscribing) return
+    const heard = voiceText
     useVoiceStore.setState({ text: '' })
-  }, [voiceListening])
+    setDraft((current) => (current.trim() === '' ? heard : `${current.trimEnd()} ${heard}`))
+  }, [voiceText, voiceListening, voiceTranscribing])
 
   const readyAttachments = draftAttachments
     .filter((item) => item.attachment.status === 'ready')
@@ -901,17 +899,26 @@ export function ChatPanel(): JSX.Element {
                   <button
                     type="button"
                     data-testid="chat-voice"
-                    title={voiceListening ? t('chat.voice.listening') : t('chat.voice.title')}
+                    title={
+                      voiceListening
+                        ? t('chat.voice.listening')
+                        : voiceTranscribing
+                          ? t('chat.voice.transcribing')
+                          : t('chat.voice.title')
+                    }
                     aria-label={t('chat.voice.title')}
                     aria-pressed={voiceListening}
+                    disabled={voiceTranscribing}
                     className={cn(iconButton, voiceListening && 'text-red-500 hover:text-red-500')}
-                    onClick={() => (voiceListening ? voiceStop() : voiceStart())}
+                    onClick={() => (voiceListening ? voiceStop() : void voiceStart())}
                   >
                     {voiceListening ? (
                       <span className="relative flex size-3.5 items-center justify-center">
                         <span className="absolute inline-flex size-3.5 animate-ping rounded-full bg-red-500/40" />
                         <span className="relative inline-flex size-2 rounded-full bg-red-500" />
                       </span>
+                    ) : voiceTranscribing ? (
+                      <Loader2 className="size-3.5 animate-spin" />
                     ) : (
                       <Mic className="size-3.5" />
                     )}
