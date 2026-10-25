@@ -116,7 +116,9 @@ export function ToolCallCard({
 
   if (part.meta?.kind === 'image') return <ImageCard meta={part.meta} />
   if (part.meta?.kind === 'figure') return <FigureCard meta={part.meta} />
-  if (part.meta?.kind === 'diff') return <DiffCard meta={part.meta} />
+  // A diff card starts collapsed and reads as a row with a ±badge; it opens
+  // into the colored patch.
+  if (part.meta?.kind === 'diff') return <DiffCard meta={part.meta} defaultCollapsed />
   if (part.meta?.kind === 'table') return <TableCard meta={part.meta} />
   if (part.meta?.kind === 'diagram') return <DiagramCard meta={part.meta} />
   if (part.meta?.kind === 'timelapse') return <TimelapseCard meta={part.meta} />

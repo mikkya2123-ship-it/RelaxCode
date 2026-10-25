@@ -191,12 +191,13 @@ export function stopTerminal(id: string): void {
 }
 
 export function listTerminals(): { sessions: TerminalSessionInfo[]; agentLog: string[] } {
-  const agent = [...sessions.values()].find((item) => item.kind === 'agent')
+  // The AI feed is always among the tabs, ready for the first command.
+  const agent = agentSession()
   return {
     sessions: [...sessions.values()].map(({ child, pending, flushable, flushTimer, running, log, ...info }) => ({
       ...info
     })),
-    agentLog: agent ? [...agent.log] : []
+    agentLog: [...agent.log]
   }
 }
 

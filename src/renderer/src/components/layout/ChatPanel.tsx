@@ -15,6 +15,7 @@ import {
   ListEnd,
   Loader2,
   MoonStar,
+  MoreHorizontal,
   Paperclip,
   PencilLine,
   Pause,
@@ -908,6 +909,39 @@ export function ChatPanel(): JSX.Element {
 
               {streaming ? (
                 <div className="flex shrink-0 items-center gap-1">
+                  {/* Rare controls (pause, queue) hide in one quiet menu, so the
+                      busy state shows only the two buttons that matter. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        data-testid="chat-more"
+                        aria-label={t('chat.more')}
+                        title={t('chat.more')}
+                        className="rounded-full"
+                      >
+                        <MoreHorizontal className="size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="top" collisionPadding={12}>
+                      <DropdownMenuItem
+                        onSelect={togglePause}
+                        className="gap-1.5 px-2 text-[12px]"
+                      >
+                        {paused ? <Play className="size-3.5 shrink-0" /> : <Pause className="size-3.5 shrink-0" />}
+                        <span className="truncate">{paused ? t('chat.resume') : t('chat.pause')}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={handleEnqueue}
+                        disabled={!draft.trim()}
+                        className="gap-1.5 px-2 text-[12px]"
+                      >
+                        <ListEnd className="size-3.5 shrink-0" />
+                        <span className="truncate">{t('chat.enqueue')}</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     variant="primary"
                     size="icon-sm"
@@ -919,29 +953,6 @@ export function ChatPanel(): JSX.Element {
                     onClick={handleSteer}
                   >
                     <Zap className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="muted"
-                    size="icon-sm"
-                    data-testid="chat-enqueue"
-                    disabled={!draft.trim()}
-                    aria-label={t('chat.enqueue')}
-                    title={t('chat.enqueue.title')}
-                    className="rounded-full"
-                    onClick={handleEnqueue}
-                  >
-                    <ListEnd className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="muted"
-                    size="icon-sm"
-                    data-testid="chat-pause"
-                    aria-label={paused ? t('chat.resume') : t('chat.pause')}
-                    title={paused ? t('chat.resume') : t('chat.pause.title')}
-                    className="rounded-full"
-                    onClick={togglePause}
-                  >
-                    {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
                   </Button>
                   <Button
                     variant="default"

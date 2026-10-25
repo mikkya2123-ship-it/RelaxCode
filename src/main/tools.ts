@@ -20,6 +20,8 @@ import { mcpToolDefs } from './mcp'
 import { blenderPaletteDefs } from './blender-palette'
 import { backupFile, displayRelative } from './backup'
 import { mirrorAgentCommand } from './term-sessions'
+import { diffText } from '@shared/diff'
+import type { DiffMeta } from '@shared/tool-meta'
 import { GIT_TOOLS } from './tools-git'
 import { CHECK_TOOLS } from './tools-check'
 import { OBSERVE_TOOLS } from './tools-observe'
@@ -263,13 +265,22 @@ const writeFileTool: ToolDef = {
   execute: async (args) => {
     const target = resolveInWorkspace(argString(args, 'path'))
     const content = argString(args, 'content', false)
+    const before = await fs.readFile(target, 'utf8').catch(() => null)
     await fs.mkdir(dirname(target), { recursive: true })
     await fs.writeFile(target, content, 'utf8')
     const lines = content === '' ? 0 : content.split(/\r?\n/).length
+    const diff = before !== null ? diffText(before, content, relPath(target)) : null
+    const counts: { added: number; removed: number } =
+      diff ?? { added: lines, removed: 0 }
+    mirrorAgentCommand(
+      `${before === null ? '✎ создать' : '✎ перезаписать'} ${relPath(target)} (+${counts.added} −${counts.removed})`,
+      { ok: true, output: '' }
+    )
     return {
       ok: true,
-      summary: `wrote ${relPath(target)} (${lines} lines, ${Buffer.byteLength(content)} bytes)`,
-      detail: `File written: ${relPath(target)}`
+      summary: `wrote ${relPath(target)} (${lines} lines, +${counts.added} −${counts.removed})`,
+      detail: `File written: ${relPath(target)}`,
+      ...(diff && diff.patch !== '' ? { meta: { kind: 'diff', file: relPath(target), patch: diff.patch } as DiffMeta } : {})
     }
   }
 }
@@ -308,10 +319,15 @@ const editFileTool: ToolDef = {
 
     const updated = replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
     await fs.writeFile(target, updated, 'utf8')
+    const diff = diffText(content, updated, relPath(target))
+    mirrorAgentCommand(`✎ ${relPath(target)} (+${diff.added} −${diff.removed})`, { ok: true, output: '' })
     return {
       ok: true,
-      summary: `edited ${relPath(target)} (${replaceAll ? occurrences : 1} replacement${occurrences > 1 ? 's' : ''})`,
-      detail: `Updated ${relPath(target)}`
+      summary: `edited ${relPath(target)} (+${diff.added} −${diff.removed}, ${replaceAll ? occurrences : 1} replacement${occurrences > 1 ? 's' : ''})`,
+      detail: `Updated ${relPath(target)}`,
+      ...(diff.patch !== ''
+        ? { meta: { kind: 'diff', file: relPath(target), patch: diff.patch } as DiffMeta }
+        : {})
     }
   }
 }
@@ -355,6 +371,7 @@ const deletePathTool: ToolDef = {
     } else {
       await fs.unlink(target)
     }
+    mirrorAgentCommand(`🗑 удалить ${relPath(target)}`, { ok: true, output: '' })
     return {
       ok: true,
       summary: `deleted ${relPath(target)}${toTrash ? ' (moved to trash)' : ''}`,
@@ -382,6 +399,7 @@ const movePathTool: ToolDef = {
     if (!stat) throw new ToolError(`Source not found: ${relPath(from)}`)
     await fs.mkdir(dirname(to), { recursive: true })
     await fs.rename(from, to)
+    mirrorAgentCommand(`→ ${relPath(from)} → ${relPath(to)}`, { ok: true, output: '' })
     return { ok: true, summary: `moved ${relPath(from)} → ${relPath(to)}`, detail: 'Move complete.' }
   }
 }

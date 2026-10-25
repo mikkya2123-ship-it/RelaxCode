@@ -5,43 +5,62 @@ import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 /** A unified diff as a colored card: green additions, red removals. */
-export function DiffCard({ meta }: { meta: DiffMeta }): JSX.Element {
+export function DiffCard({ meta, defaultCollapsed = false }: { meta: DiffMeta; defaultCollapsed?: boolean }): JSX.Element {
+  const t = useT()
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [expanded, setExpanded] = useState(false)
   const lines = meta.patch.split('\n')
-  const shown = expanded ? lines : lines.slice(0, 14)
+  // The header lines (`---`/`+++`) are metadata; the body carries the change.
+  const body = lines.filter((line) => !line.startsWith('---') && !line.startsWith('+++'))
+  const added = body.filter((line) => line.startsWith('+') && !line.startsWith('+++')).length
+  const removed = body.filter((line) => line.startsWith('-') && !line.startsWith('---')).length
+  const shown = expanded ? body : body.slice(0, 14)
   return (
     <div className="w-full overflow-hidden rounded-lg border border-border bg-panel/70" data-testid="diff-card">
-      <div className="flex items-center gap-2 px-2.5 py-1.5 text-[12px]">
-        {meta.file && <span className="truncate font-mono text-[11px] text-muted-foreground">{meta.file}</span>}
-        {meta.title && <span className="min-w-0 flex-1 truncate text-foreground/90">{meta.title}</span>}
-      </div>
-      <div className="max-h-[420px] overflow-auto border-t border-border/60 px-2 py-1.5">
-        <pre className="font-mono text-[11px] leading-relaxed">
-          {shown.map((line, index) => (
-            <div
-              key={index}
-              className={cn(
-                '-mx-1 rounded px-1',
-                line.startsWith('@@') && 'text-tertiary',
-                line.startsWith('+') && !line.startsWith('+++') && 'bg-success/10 text-green-700 dark:text-green-400',
-                line.startsWith('-') && !line.startsWith('---') && 'bg-destructive/10 text-red-700 dark:text-red-400'
-              )}
-            >
-              {line || ' '}
-            </div>
-          ))}
-        </pre>
-        {!expanded && lines.length > 14 && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="mt-1 flex w-full items-center justify-center gap-1 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronDown className="size-3" />
-            {lines.length - 14} more lines
-          </button>
+      <button
+        type="button"
+        onClick={() => setCollapsed((value) => !value)}
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-100 hover:bg-foreground/[0.03]"
+      >
+        <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform', collapsed && '-rotate-90')} />
+        {meta.file && <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground/90">{meta.file}</span>}
+        {!meta.file && meta.title && <span className="min-w-0 flex-1 truncate text-[12px] text-foreground/90">{meta.title}</span>}
+        {added + removed > 0 && (
+          <span className="shrink-0 rounded-full bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[10px] tabular-nums">
+            <span className="text-green-600 dark:text-green-400">+{added}</span>{' '}
+            <span className="text-red-600 dark:text-red-400">−{removed}</span>
+          </span>
         )}
-      </div>
+      </button>
+      {!collapsed && (
+        <div className="max-h-[420px] overflow-auto border-t border-border/60 px-2 py-1.5">
+          <pre className="font-mono text-[11px] leading-relaxed">
+            {shown.map((line, index) => (
+              <div
+                key={index}
+                className={cn(
+                  '-mx-1 rounded px-1',
+                  line.startsWith('@@') && 'text-tertiary',
+                  line.startsWith('+') && !line.startsWith('+++') && 'bg-success/10 text-green-700 dark:text-green-400',
+                  line.startsWith('-') && !line.startsWith('---') && 'bg-destructive/10 text-red-700 dark:text-red-400'
+                )}
+              >
+                {line || ' '}
+              </div>
+            ))}
+          </pre>
+          {!expanded && body.length > 14 && (
+            <button
+              type="button"
+              onClick={() => setExpanded(true)}
+              className="mt-1 flex w-full items-center justify-center gap-1 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronDown className="size-3" />
+              {t('chat.diff.more', { n: body.length - 14 })}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
