@@ -2,8 +2,10 @@ import { useState, type JSX } from 'react'
 import {
   Check,
   ChevronRight,
+  Database,
   FilePlus,
   FileText,
+  FlaskConical,
   FolderTree,
   GitBranch,
   Globe,
@@ -11,12 +13,16 @@ import {
   ListChecks,
   Loader2,
   MessageCircleQuestion,
+  Monitor,
   MoveRight,
   Pencil,
   Ruler,
   Search,
+  Table as TableIcon,
   Terminal,
+  Timer,
   Trash2,
+  Waypoints,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -25,8 +31,10 @@ import { cn } from '@/lib/utils'
 import { WebSearchCard } from './WebSearchCard'
 import { ImageCard } from './ImageCard'
 import { FigureCard } from './FigureCard'
+import { DiffCard, TableCard, DiagramCard, TimelapseCard } from './DataCards'
 
 function iconFor(name: string): LucideIcon {
+  if (name.startsWith('git_')) return GitBranch
   switch (name) {
     case 'list_dir':
       return FolderTree
@@ -42,12 +50,31 @@ function iconFor(name: string): LucideIcon {
       return MoveRight
     case 'search_files':
     case 'search_content':
+    case 'symbol_search':
+    case 'find_references':
       return Search
     case 'run_command':
       return Terminal
-    case 'git_status':
-    case 'git_diff':
-      return GitBranch
+    case 'run_tests':
+      return FlaskConical
+    case 'lint_check':
+    case 'type_check':
+      return Check
+    case 'db_query':
+      return Database
+    case 'screenshot_app':
+    case 'check_mobile':
+    case 'browser_pilot':
+    case 'fill_form':
+    case 'chaos_check':
+      return Monitor
+    case 'show_table':
+      return TableIcon
+    case 'make_diagram':
+      return Waypoints
+    case 'schedule_task':
+    case 'watch_folder':
+      return Timer
     case 'todo_write':
       return ListChecks
     case 'ask_user':
@@ -89,6 +116,10 @@ export function ToolCallCard({
 
   if (part.meta?.kind === 'image') return <ImageCard meta={part.meta} />
   if (part.meta?.kind === 'figure') return <FigureCard meta={part.meta} />
+  if (part.meta?.kind === 'diff') return <DiffCard meta={part.meta} />
+  if (part.meta?.kind === 'table') return <TableCard meta={part.meta} />
+  if (part.meta?.kind === 'diagram') return <DiagramCard meta={part.meta} />
+  if (part.meta?.kind === 'timelapse') return <TimelapseCard meta={part.meta} />
   if (part.name === 'web_search') {
     return <WebSearchCard part={part} defaultExpanded={defaultExpanded} />
   }
@@ -120,7 +151,7 @@ export function ToolCallCard({
         )}
       </button>
       {expanded && part.detail && (
-        <pre className="max-h-56 overflow-auto whitespace-pre-wrap border-t border-border/70 px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+        <pre className="max-h-56 overflow-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
           {part.detail}
         </pre>
       )}

@@ -6,24 +6,39 @@ import {
   type KeyboardEvent as ReactKeyboardEvent
 } from 'react'
 import {
+  ArrowDown,
   ArrowUp,
   Check,
   ChevronDown,
   CircleAlert,
+  History,
+  ListEnd,
   Loader2,
+  Mic,
+  MoonStar,
+  Paperclip,
+  PencilLine,
+  Pause,
+  Play,
   Plus,
   RefreshCw,
   Settings,
   Square,
-  Trash2
+  Trash2,
+  X,
+  Zap
 } from 'lucide-react'
 import type { ChatMode } from '@shared/ipc'
+import { ATTACHMENT_LIMITS, type AttachmentRef } from '@shared/attachments'
+import { LOOPS_BEFORE_OFF } from '@shared/model-memory'
 import { useUiStore } from '@/stores/ui'
-import { useChatStore } from '@/stores/chat'
+import { useChatStore, type AttachmentPart } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { toast } from '@/stores/toast'
 import { useT, useTranslateError } from '@/lib/i18n'
 import { catalogForBaseUrl } from '@/lib/provider-catalog'
+import { createPendingAttachment, processAttachment } from '@/lib/attachments'
+import { useVoiceStore } from '@/stores/voice'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -39,7 +54,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { ToolCallCard } from '@/components/chat/ToolCallCard'
-import { AnswerWithCitations, WebSourcesFooter } from '@/components/chat/WebSearchCard'
+import { AttachmentChip, AttachmentStrip } from '@/components/chat/AttachmentStrip'
+import { WebSourcesFooter } from '@/components/chat/WebSearchCard'
+import { Markdown } from '@/components/chat/Markdown'
 import { ReasoningCard } from '@/components/chat/ReasoningCard'
 import { ContextMeter } from '@/components/chat/ContextMeter'
 import { ThinkingMenu } from '@/components/chat/ThinkingMenu'
@@ -76,6 +93,14 @@ export function ChatPanel(): JSX.Element {
   const saved = useChatStore((s) => s.saved)
   const send = useChatStore((s) => s.send)
   const stop = useChatStore((s) => s.stop)
+  const enqueue = useChatStore((s) => s.enqueue)
+  const queueAction = useChatStore((s) => s.queueAction)
+  const steer = useChatStore((s) => s.steer)
+  const togglePause = useChatStore((s) => s.togglePause)
+  const toggleNight = useChatStore((s) => s.toggleNight)
+  const queue = useChatStore((s) => s.queue)
+  const paused = useChatStore((s) => s.paused)
+  const night = useChatStore((s) => s.night)
   const stopProcess = useChatStore((s) => s.stopProcess)
   const respondApproval = useChatStore((s) => s.respondApproval)
   const replyQuestion = useChatStore((s) => s.replyQuestion)
@@ -101,6 +126,17 @@ export function ChatPanel(): JSX.Element {
   const sendOnEnter = chatSettings?.sendOnEnter ?? true
   const autoScroll = chatSettings?.autoScroll ?? true
   const [draft, setDraft] = useState('')
+  /** Files waiting to go out with the next message, alongside their shells. */
+  const [draftAttachments, setDraftAttachments] = useState<Array<{ file: File; attachment: AttachmentRef }>>([])
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const voiceListening = useVoiceStore((s) => s.listening)
+  const voiceUnsupported = useVoiceStore((s) => s.unsupported)
+  const voiceText = useVoiceStore((s) => s.text)
+  const voiceStart = useVoiceStore((s) => s.start)
+  const voiceStop = useVoiceStore((s) => s.stop)
+  const voiceTextRef = useRef('')
+  voiceTextRef.current = voiceText
   const [modelOpen, setModelOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const modelListRef = useRef<HTMLDivElement>(null)
@@ -161,6 +197,12 @@ export function ChatPanel(): JSX.Element {
         )
         noticeWarning = true
         break
+      case 'night-limit':
+        noticeText = t(
+          notice.reason === 'tokens' ? 'chat.notice.nightTokens' : 'chat.notice.nightTimeout'
+        )
+        noticeWarning = true
+        break
       case 'param-dropped':
         noticeText = t(
           notice.param === 'reasoning'
@@ -170,6 +212,26 @@ export function ChatPanel(): JSX.Element {
               : 'chat.notice.paramDroppedOther'
         )
         noticeWarning = true
+        break
+      case 'image-dropped':
+        noticeText = t('chat.notice.imageDropped')
+        noticeWarning = true
+        break
+      case 'thinking-loop':
+        noticeText = t(
+          notice.loops >= LOOPS_BEFORE_OFF
+            ? 'chat.notice.thinkingLoopOff'
+            : 'chat.notice.thinkingLoopLowered',
+          { n: notice.repeats }
+        )
+        noticeWarning = true
+        break
+      case 'thinking-lowered':
+        noticeText = t('chat.notice.thinkingLowered', {
+          loops: notice.loops,
+          from: t(`chat.thinking.${notice.from}` as 'chat.thinking.off'),
+          to: t(`chat.thinking.${notice.to}` as 'chat.thinking.off')
+        })
         break
       case 'rate-limit-retry':
       case 'server-retry':
@@ -181,16 +243,95 @@ export function ChatPanel(): JSX.Element {
     }
   }
 
+  // Without this, a file dropped anywhere outside the composer would navigate
+  // the window to the file itself. Files are only accepted by the composer.
+  useEffect(() => {
+    const swallow = (event: DragEvent): void => {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+    }
+    window.addEventListener('dragover', swallow)
+    window.addEventListener('drop', swallow)
+    return () => {
+      window.removeEventListener('dragover', swallow)
+      window.removeEventListener('drop', swallow)
+    }
+  }, [])
+
+  /** Files join the draft as chips; the bytes are decoded while the user types. */
+  const addFiles = (files: ArrayLike<File>): void => {
+    const all = Array.from(files)
+    if (all.length === 0) return
+    const room = ATTACHMENT_LIMITS.maxCount - draftAttachments.length
+    if (room <= 0) {
+      toast(t('chat.attach.tooMany', { n: ATTACHMENT_LIMITS.maxCount }))
+      return
+    }
+    const incoming = all.slice(0, room)
+    if (incoming.length < all.length) toast(t('chat.attach.tooMany', { n: ATTACHMENT_LIMITS.maxCount }))
+    const shells = incoming.map((file) => ({ file, attachment: createPendingAttachment(file) }))
+    setDraftAttachments((prev) => [...prev, ...shells])
+    for (const shell of shells) {
+      if (shell.attachment.status === 'error') continue
+      void processAttachment(shell.attachment, shell.file).then((resolved) => {
+        setDraftAttachments((prev) =>
+          prev.map((item) => (item.attachment.id === resolved.id ? { ...item, attachment: resolved } : item))
+        )
+      })
+    }
+  }
+
+  const removeAttachment = (id: string): void => {
+    setDraftAttachments((prev) => prev.filter((item) => item.attachment.id !== id))
+  }
+
+  // When dictation stops, its text lands in the draft (kept once via ref).
+  useEffect(() => {
+    if (voiceListening || voiceTextRef.current === '') return
+    const heard = voiceTextRef.current
+    voiceTextRef.current = ''
+    setDraft((current) => (current.trim() === '' ? heard : `${current.trimEnd()} ${heard}`))
+    useVoiceStore.setState({ text: '' })
+  }, [voiceListening])
+
+  const readyAttachments = draftAttachments
+    .filter((item) => item.attachment.status === 'ready')
+    .map((item) => item.attachment)
+  // A chip that is still decoding, or one that failed, holds the send: the
+  // user should see which files are actually about to reach the model.
+  const attachmentsBusy = draftAttachments.some((item) => item.attachment.status !== 'ready')
+
   const handleSend = (): void => {
     if (streaming || streamsElsewhere || pendingApproval || pendingQuestion) return
     if (!model) {
       openSettings()
       return
     }
+    // Enter and the button must agree: a chip still decoding or failed holds
+    // the send until it is ready or removed.
+    if (attachmentsBusy) return
+    const text = draft
+    if (!text.trim() && readyAttachments.length === 0) return
+    setDraft('')
+    setDraftAttachments([])
+    void send(text, undefined, readyAttachments)
+  }
+
+  /** Mid-run input: interrupt the agent with this message at the next step. */
+  const handleSteer = (): void => {
+    const text = draft
+    if (!text.trim() || !streaming) return
+    setDraft('')
+    void steer(text).then((injected) => {
+      // The run can end between the click and the call — queue it instead.
+      if (!injected) enqueue(text)
+    })
+  }
+
+  const handleEnqueue = (): void => {
     const text = draft
     if (!text.trim()) return
     setDraft('')
-    void send(text)
+    enqueue(text)
   }
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
@@ -198,7 +339,8 @@ export function ChatPanel(): JSX.Element {
     // Either Enter sends and Ctrl+Enter breaks the line, or the other way round.
     if (sendOnEnter || event.ctrlKey || event.metaKey) {
       event.preventDefault()
-      handleSend()
+      if (streaming) handleSteer()
+      else handleSend()
     }
   }
 
@@ -212,8 +354,7 @@ export function ChatPanel(): JSX.Element {
     <aside
       style={{ width: open ? chatWidth : 0 }}
       className={cn(
-        'relative h-full shrink-0 overflow-hidden bg-background transition-[width] duration-200 ease-out',
-        open && 'border-l border-border'
+        'relative h-full shrink-0 overflow-hidden bg-background transition-[width] duration-200 ease-out'
       )}
       aria-hidden={!open}
     >
@@ -307,13 +448,49 @@ export function ChatPanel(): JSX.Element {
               {messages.map((message) =>
                 message.role === 'user' ? (
                   <div key={message.id} className="flex max-w-[85%] flex-col items-end gap-0.5 self-end">
-                    <div className="whitespace-pre-wrap break-words rounded-2xl bg-foreground/[0.06] px-3.5 py-2 text-[13px] leading-relaxed">
-                      {message.parts
-                        .filter((part) => part.kind === 'text')
-                        .map((part, index) => (
-                          <span key={index}>{part.kind === 'text' ? part.text : null}</span>
-                        ))}
-                    </div>
+                    {(() => {
+                      const attachments = message.parts.filter(
+                        (part): part is AttachmentPart => part.kind === 'attachment'
+                      )
+                      const hasText = message.parts.some((part) => part.kind === 'text' && part.text !== '')
+                      return (
+                        <>
+                          {attachments.length > 0 && <AttachmentStrip attachments={attachments.map((part) => part.attachment)} />}
+                          {hasText && (
+                            <div className="whitespace-pre-wrap break-words rounded-2xl bg-foreground/[0.06] px-3.5 py-2 text-[13px] leading-relaxed">
+                              {message.steered && <Zap className="mb-0.5 ml-auto block size-3 text-amber-500" />}
+                              {message.parts
+                                .filter((part) => part.kind === 'text')
+                                .map((part, index) => (
+                                  <span key={index}>{part.kind === 'text' ? part.text : null}</span>
+                                ))}
+                            </div>
+                          )}
+                          {message.snapshot && (
+                            <button
+                              type="button"
+                              data-testid="chat-timetravel"
+                              title={t('chat.timeTravel.title')}
+                              aria-label={t('chat.timeTravel.title')}
+                              className={cn(iconButton, 'text-[10px]')}
+                              onClick={() => {
+                                if (!window.confirm(t('chat.timeTravel.confirm'))) return
+                                void window.relaxcode.snapshots.restore(message.snapshot as string).then((result) => {
+                                  toast(
+                                    result.ok
+                                      ? t('chat.timeTravel.done', { n: result.files })
+                                      : t('chat.timeTravel.failed')
+                                  )
+                                })
+                              }}
+                            >
+                              <History className="size-3" />
+                              {t('chat.timeTravel.label')}
+                            </button>
+                          )}
+                        </>
+                      )
+                    })()}
                     {ui?.showTimestamps && message.at !== undefined && (
                       <span className="pr-1 text-[10px] tabular-nums text-tertiary">
                         {formatTime(message.at)}
@@ -327,9 +504,7 @@ export function ChatPanel(): JSX.Element {
                   >
                     {message.parts.map((part, index) =>
                       part.kind === 'text' ? (
-                        <p key={index} className="whitespace-pre-wrap break-words">
-                          <AnswerWithCitations text={part.text} parts={message.parts} />
-                        </p>
+                        <Markdown key={index} text={part.text} parts={message.parts} />
                       ) : part.kind === 'reasoning' ? (
                         <ReasoningCard
                           key={`reasoning-${index}`}
@@ -337,13 +512,13 @@ export function ChatPanel(): JSX.Element {
                           live={message.status === 'streaming' && index === message.parts.length - 1}
                           defaultOpen={ui?.reasoningOpen ?? false}
                         />
-                      ) : (
+                      ) : part.kind === 'tool' ? (
                         <ToolCallCard
                           key={`${part.callId}-${index}`}
                           part={part}
                           defaultExpanded={ui?.toolDetailsOpen ?? false}
                         />
-                      )
+                      ) : null
                     )}
                     <WebSourcesFooter parts={message.parts} />
                     {message.status === 'streaming' && message.parts.length === 0 && (
@@ -420,23 +595,151 @@ export function ChatPanel(): JSX.Element {
             </p>
           )}
 
-          <div className="rounded-[12px] border border-input bg-card shadow-xs transition-colors duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
+          {queue.length > 0 && (
+            <div className="space-y-1 rounded-[12px] border border-border bg-card/60 p-1.5" data-testid="chat-queue">
+              <p className="px-1.5 pt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {t('chat.queue.title', { n: queue.length })}
+              </p>
+              {queue.map((item, index) => (
+                <div key={item.id} className="flex items-center gap-1 rounded-md bg-background px-1.5 py-1">
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-foreground" title={item.text}>
+                    {item.text}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('chat.queue.up')}
+                    className={cn(iconButton)}
+                    disabled={index === 0}
+                    onClick={() => queueAction(item.id, 'up')}
+                  >
+                    <ArrowUp className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('chat.queue.down')}
+                    className={cn(iconButton)}
+                    disabled={index === queue.length - 1}
+                    onClick={() => queueAction(item.id, 'down')}
+                  >
+                    <ArrowDown className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('chat.queue.edit')}
+                    className={cn(iconButton)}
+                    onClick={() => {
+                      setDraft(item.text)
+                      queueAction(item.id, 'remove')
+                    }}
+                  >
+                    <PencilLine className="size-3" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('chat.queue.remove')}
+                    className={cn(iconButton)}
+                    onClick={() => queueAction(item.id, 'remove')}
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div
+            className={cn(
+              'composer-frame relative rounded-[12px] border border-input bg-card shadow-xs transition-colors duration-150 focus-within:border-ring',
+              dragOver && 'border-ring border-dashed'
+            )}
+            onDragOver={(event) => {
+              if (event.dataTransfer.types.includes('Files')) {
+                event.preventDefault()
+                setDragOver(true)
+              }
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragOver(false)
+            }}
+            onDrop={(event) => {
+              if (event.dataTransfer.files.length === 0) return
+              event.preventDefault()
+              setDragOver(false)
+              addFiles(event.dataTransfer.files)
+            }}
+          >
+            {/* Focus flash: a light along the top edge that slides down a bit
+                and melts away. */}
+            <span className="composer-flash" aria-hidden="true" />
+            {draftAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 px-2 pt-2" data-testid="chat-attachments-draft">
+                {draftAttachments.map(({ attachment }) => (
+                  <div
+                    key={attachment.id}
+                    className="group/attach relative"
+                    data-status={attachment.status}
+                    title={attachment.status === 'error' ? attachment.error : attachment.name}
+                  >
+                    <AttachmentChip
+                      attachment={attachment}
+                      className={cn(
+                        'h-12 w-12 rounded-md',
+                        attachment.status === 'error' && 'border-destructive/60 opacity-60'
+                      )}
+                    />
+                    {attachment.status === 'pending' && (
+                      <span className="absolute inset-0 flex items-center justify-center rounded-md bg-background/60">
+                        <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={t('chat.attach.remove')}
+                      className="absolute -right-1 -top-1 rounded-full border border-border bg-card p-0.5 text-muted-foreground opacity-0 shadow-xs transition-opacity duration-100 hover:text-foreground focus-visible:opacity-100 group-hover/attach:opacity-100"
+                      onClick={() => removeAttachment(attachment.id)}
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {dragOver && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[12px] border border-dashed border-ring bg-card/85 text-[11px] text-muted-foreground">
+                {t('chat.attach.drop')}
+              </div>
+            )}
             <Textarea
               rows={2}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={(event) => {
+                const files = event.clipboardData?.files
+                if (files && files.length > 0) {
+                  event.preventDefault()
+                  addFiles(files)
+                }
+              }}
               placeholder={
                 pendingApproval
                   ? t('chat.approval.awaiting')
-                  : streamsElsewhere
-                    ? t('chat.busy')
-                    : t('chat.placeholder')
+                  : streaming
+                    ? paused
+                      ? t('chat.pausedPlaceholder')
+                      : t('chat.steerPlaceholder')
+                    : streamsElsewhere
+                      ? t('chat.busy')
+                      : t('chat.placeholder')
               }
               className="max-h-[200px] min-h-[56px] resize-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
             <div className="flex items-center justify-between gap-2 px-2 pb-2">
-              <div className="flex min-w-0 items-center gap-1.5">
+              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                {/* The model chip and the mode switch only shape the next run,
+                    so while one is streaming they give their room to the
+                    steering buttons instead of squeezing them out. */}
+                {!streaming && (
                 <DropdownMenu
                   open={modelOpen}
                   onOpenChange={(next) => {
@@ -450,7 +753,10 @@ export function ChatPanel(): JSX.Element {
                       data-testid="chat-model"
                       title={model ?? t('chat.modelNotSelected')}
                       className={cn(
-                        'flex w-[160px] min-w-[112px] shrink items-center gap-1 rounded-md border border-input bg-card px-1.5 py-1 text-[11px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+                        // Shrinks with the panel — the name truncates, the
+                        // chevron stays — so the icon buttons to the right
+                        // never get pushed under the send button.
+                        'flex w-[160px] min-w-[56px] shrink items-center gap-1 rounded-md border border-input bg-card px-1.5 py-1 text-[11px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
                         // While the list is open the chip and the panel read as one sheet.
                         modelOpen && 'rounded-t-none'
                       )}
@@ -528,7 +834,7 @@ export function ChatPanel(): JSX.Element {
                         </DropdownMenuItem>
                       ))}
                     </div>
-                    <div className="border-t border-border p-1">
+                    <div className="p-1">
                       <DropdownMenuItem
                         onSelect={() => void loadModels(true)}
                         className="gap-1.5 px-2 text-[12px]"
@@ -546,7 +852,9 @@ export function ChatPanel(): JSX.Element {
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                )}
 
+                {!streaming && (
                 <div
                   data-testid="chat-modes"
                   className="flex items-center gap-0.5 rounded-md bg-foreground/[0.05] p-0.5"
@@ -567,6 +875,7 @@ export function ChatPanel(): JSX.Element {
                     </button>
                   ))}
                 </div>
+                )}
 
                 <ThinkingMenu
                   level={thinking}
@@ -575,25 +884,122 @@ export function ChatPanel(): JSX.Element {
                   live={streaming && thinking !== 'off'}
                   onChange={setThinking}
                 />
+
+                {!streaming && (
+                  <button
+                    type="button"
+                    data-testid="chat-attach"
+                    title={t('chat.attach.title')}
+                    aria-label={t('chat.attach.title')}
+                    className={cn(iconButton)}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="size-3.5" />
+                  </button>
+                )}
+                {!streaming && !voiceUnsupported && (
+                  <button
+                    type="button"
+                    data-testid="chat-voice"
+                    title={voiceListening ? t('chat.voice.listening') : t('chat.voice.title')}
+                    aria-label={t('chat.voice.title')}
+                    aria-pressed={voiceListening}
+                    className={cn(iconButton, voiceListening && 'text-red-500 hover:text-red-500')}
+                    onClick={() => (voiceListening ? voiceStop() : voiceStart())}
+                  >
+                    {voiceListening ? (
+                      <span className="relative flex size-3.5 items-center justify-center">
+                        <span className="absolute inline-flex size-3.5 animate-ping rounded-full bg-red-500/40" />
+                        <span className="relative inline-flex size-2 rounded-full bg-red-500" />
+                      </span>
+                    ) : (
+                      <Mic className="size-3.5" />
+                    )}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={(event) => {
+                    addFiles(event.target.files ?? [])
+                    // So picking the same file twice in a row still fires.
+                    event.target.value = ''
+                  }}
+                />
+
+                <button
+                  type="button"
+                  data-testid="chat-night"
+                  title={t('chat.night.title')}
+                  aria-pressed={night}
+                  className={cn(
+                    'rounded-md p-1 text-tertiary transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground',
+                    night && 'bg-amber-500/15 text-amber-500 hover:text-amber-500'
+                  )}
+                  onClick={toggleNight}
+                >
+                  <MoonStar className="size-3.5" />
+                </button>
               </div>
 
               {streaming ? (
-                <Button
-                  variant="default"
-                  size="icon-sm"
-                  data-testid="chat-send"
-                  aria-label={t('chat.stop')}
-                  className="shrink-0 rounded-full"
-                  onClick={stop}
-                >
-                  <Square className="size-3 fill-current" />
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="primary"
+                    size="icon-sm"
+                    data-testid="chat-steer"
+                    disabled={!draft.trim()}
+                    aria-label={t('chat.steer')}
+                    title={t('chat.steer.title')}
+                    className="rounded-full"
+                    onClick={handleSteer}
+                  >
+                    <Zap className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="muted"
+                    size="icon-sm"
+                    data-testid="chat-enqueue"
+                    disabled={!draft.trim()}
+                    aria-label={t('chat.enqueue')}
+                    title={t('chat.enqueue.title')}
+                    className="rounded-full"
+                    onClick={handleEnqueue}
+                  >
+                    <ListEnd className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="muted"
+                    size="icon-sm"
+                    data-testid="chat-pause"
+                    aria-label={paused ? t('chat.resume') : t('chat.pause')}
+                    title={paused ? t('chat.resume') : t('chat.pause.title')}
+                    className="rounded-full"
+                    onClick={togglePause}
+                  >
+                    {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="icon-sm"
+                    data-testid="chat-send"
+                    aria-label={t('chat.stop')}
+                    className="rounded-full"
+                    onClick={stop}
+                  >
+                    <Square className="size-3 fill-current" />
+                  </Button>
+                </div>
               ) : (
                 <Button
                   variant="primary"
                   size="icon-sm"
                   data-testid="chat-send"
-                  disabled={!draft.trim() || streamsElsewhere}
+                  disabled={
+                    (!draft.trim() && readyAttachments.length === 0) || attachmentsBusy || streamsElsewhere
+                  }
                   aria-label={t('chat.send')}
                   className="shrink-0 rounded-full"
                   onClick={handleSend}

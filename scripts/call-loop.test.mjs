@@ -61,6 +61,12 @@ const notice = repeatNotice('edit_file', { attempts: 3, ok: false, mutations: 0 
 check('the notice names the tool and the count', notice.includes('edit_file') && notice.includes('3 time(s)'))
 check('the notice says the call failed', notice.includes('failed'))
 check('the notice tells the model what to do instead', notice.includes('Read the file again'))
+const commandNotice = repeatNotice('run_command', { attempts: 2, ok: false, mutations: 0 })
+check(
+  'a command notice asks for a different command, not a re-read',
+  commandNotice.includes('Change the command') && !commandNotice.includes('Read the file again'),
+  commandNotice
+)
 check(
   'a successful call is described as succeeded',
   repeatNotice('write_file', { attempts: 1, ok: true, mutations: 1 }).includes('succeeded')

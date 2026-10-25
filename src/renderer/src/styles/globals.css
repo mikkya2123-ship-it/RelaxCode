@@ -99,6 +99,11 @@
     overflow: hidden;
   }
 
+  /* Only the code editor reads as a rounded surface; side panels stay separate. */
+  .workspace-shell {
+    background: var(--card);
+  }
+
   ::selection {
     background: rgba(28, 28, 30, 0.12);
   }
@@ -302,6 +307,77 @@
 }
 
 /* ------------------------------------------------------------------- *
+ * Composer focus flash — on focus a soft light appears along the top
+ * edge of the input, slides a little way down and gently melts away.
+ * ------------------------------------------------------------------- */
+
+.composer-frame {
+  position: relative;
+  overflow: hidden;
+}
+
+.composer-flash {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+}
+
+/* The light: brightest on the top edge, fading downward. */
+.composer-frame:focus-within .composer-flash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, var(--ring), transparent 65%);
+  opacity: 0.5;
+  animation: ec-composer-flash-down 700ms ease-out forwards;
+}
+
+/* A second, brighter top line that sinks a few pixels and dissolves. */
+.composer-frame:focus-within .composer-flash::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, var(--ring), transparent);
+  animation: ec-composer-flash-line 700ms ease-out forwards;
+}
+
+/* Sinks a little way down and fades out completely. */
+@keyframes ec-composer-flash-line {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* The soft glow just follows the line down, weaker and slower. */
+@keyframes ec-composer-flash-down {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ------------------------------------------------------------------- *
  * Thinking scale — the warm-up rail of the thinking slider and the chip
  * that mirrors it in the composer. The colour holds still (cold on the
  * left, hot on the right) while one soft band of light glides over it,
@@ -490,6 +566,7 @@
     box-shadow 0.15s ease;
 }
 
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-pop-in,
@@ -497,8 +574,11 @@
   .model-marquee,
   .think-glow,
   .think-rail-gradient::before,
-  .think-rail-gradient::after {
+  .think-rail-gradient::after,
+  .composer-frame:focus-within .composer-flash::before,
+  .composer-frame:focus-within .composer-flash::after {
     animation: none;
+    opacity: 0;
   }
 
   *,

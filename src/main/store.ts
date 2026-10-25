@@ -463,8 +463,21 @@ function sanitizeAgent(value: unknown): Partial<SettingsValues['agent']> {
   if (raw.ruleTodos !== undefined) out.ruleTodos = asBoolean(raw.ruleTodos, d.ruleTodos)
   if (raw.ruleServers !== undefined) out.ruleServers = asBoolean(raw.ruleServers, d.ruleServers)
   if (raw.ruleVerify !== undefined) out.ruleVerify = asBoolean(raw.ruleVerify, d.ruleVerify)
+  if (raw.morningBriefing !== undefined) out.morningBriefing = asBoolean(raw.morningBriefing, d.morningBriefing)
+  if (raw.selfReview !== undefined) out.selfReview = asBoolean(raw.selfReview, d.selfReview)
+  if (raw.timeTravel !== undefined) out.timeTravel = asBoolean(raw.timeTravel, d.timeTravel)
+  if (raw.timelapse !== undefined) out.timelapse = asBoolean(raw.timelapse, d.timelapse)
   if (raw.tokenSaving !== undefined) {
     out.tokenSaving = asChoice(raw.tokenSaving, TOKEN_SAVING_MODES, d.tokenSaving)
+  }
+  if (raw.nightMaxSteps !== undefined) {
+    out.nightMaxSteps = Math.round(asNumber(raw.nightMaxSteps, 1, 2000, d.nightMaxSteps))
+  }
+  if (raw.nightMaxTokens !== undefined) {
+    out.nightMaxTokens = Math.round(asNumber(raw.nightMaxTokens, 10000, 100000000, d.nightMaxTokens))
+  }
+  if (raw.nightTimeoutMin !== undefined) {
+    out.nightTimeoutMin = Math.round(asNumber(raw.nightTimeoutMin, 1, 1440, d.nightTimeoutMin))
   }
   return out
 }
@@ -597,6 +610,10 @@ function sanitizeUi(value: unknown): Partial<SettingsValues['ui']> {
   if (raw.reasoningOpen !== undefined) out.reasoningOpen = asBoolean(raw.reasoningOpen, d.reasoningOpen)
   if (raw.chatWidth !== undefined) out.chatWidth = Math.round(asNumber(raw.chatWidth, 300, 720, d.chatWidth))
   if (raw.serversPanel !== undefined) out.serversPanel = asBoolean(raw.serversPanel, d.serversPanel)
+  if (raw.screenOpen !== undefined) out.screenOpen = asBoolean(raw.screenOpen, d.screenOpen)
+  if (raw.screenWidth !== undefined) {
+    out.screenWidth = Math.round(asNumber(raw.screenWidth, 280, 720, d.screenWidth))
+  }
   return out
 }
 
@@ -689,6 +706,7 @@ function sanitizeKeymap(value: unknown): Partial<SettingsValues['keymap']> {
   const out: Partial<SettingsValues['keymap']> = {}
   if (raw.toggleSidebar !== undefined) out.toggleSidebar = asString(raw.toggleSidebar, d.toggleSidebar, 40)
   if (raw.toggleChat !== undefined) out.toggleChat = asString(raw.toggleChat, d.toggleChat, 40)
+  if (raw.toggleScreen !== undefined) out.toggleScreen = asString(raw.toggleScreen, d.toggleScreen, 40)
   if (raw.save !== undefined) out.save = asString(raw.save, d.save, 40)
   if (raw.newChat !== undefined) out.newChat = asString(raw.newChat, d.newChat, 40)
   if (raw.openSettings !== undefined) out.openSettings = asString(raw.openSettings, d.openSettings, 40)
@@ -697,6 +715,7 @@ function sanitizeKeymap(value: unknown): Partial<SettingsValues['keymap']> {
   if (raw.rename !== undefined) out.rename = asString(raw.rename, d.rename, 40)
   if (raw.deleteEntry !== undefined) out.deleteEntry = asString(raw.deleteEntry, d.deleteEntry, 40)
   if (raw.closeTab !== undefined) out.closeTab = asString(raw.closeTab, d.closeTab, 40)
+  if (raw.pushToTalk !== undefined) out.pushToTalk = asString(raw.pushToTalk, d.pushToTalk, 40)
   return out
 }
 

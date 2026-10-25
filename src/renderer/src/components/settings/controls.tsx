@@ -59,7 +59,7 @@ export function Row({ def, label, hint, keywords, wide, children }: RowProps): J
     <div
       data-setting={def?.id}
       className={cn(
-        'border-b border-border/60 px-5 py-3.5 last:border-b-0',
+        'px-5 py-3.5',
         wide ? 'space-y-2' : 'flex items-start justify-between gap-6'
       )}
     >

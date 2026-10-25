@@ -12,7 +12,7 @@ export function StatusBar(): JSX.Element | null {
   if (!visible) return null
 
   return (
-    <footer className="flex h-7 shrink-0 select-none items-center justify-between border-t border-border bg-panel px-3 text-[11px] text-muted-foreground">
+    <footer className="flex h-7 shrink-0 select-none items-center justify-between bg-background px-3 text-[11px] text-muted-foreground">
       <span>{t('status.version')}</span>
       <span className="flex items-center gap-3">
         {active && (

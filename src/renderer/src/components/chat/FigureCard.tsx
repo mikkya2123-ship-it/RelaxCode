@@ -214,7 +214,7 @@ export function FigureCard({ meta }: { meta: FigureMeta }): JSX.Element {
       className="overflow-hidden rounded-xl border border-border bg-panel/70"
       data-testid="figure-card"
     >
-      <div className="flex items-center gap-2 border-b border-border/70 px-3 py-1.5">
+      <div className="flex items-center gap-2 px-3 py-1.5">
         <Ruler className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium text-foreground/85">
           {meta.title || t('chat.figure.title')}
@@ -285,13 +285,13 @@ export function FigureCard({ meta }: { meta: FigureMeta }): JSX.Element {
       </div>
 
       {meta.caption && (
-        <figcaption className="border-t border-border/60 px-3 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
+        <figcaption className="px-3 py-1.5 text-[11px] leading-relaxed text-muted-foreground">
           {meta.caption}
         </figcaption>
       )}
 
       {spec && (
-        <div className="flex items-center gap-2 border-t border-border/60 px-3 py-1 text-[10px] text-tertiary">
+        <div className="flex items-center gap-2 px-3 py-1 text-[10px] text-tertiary">
           <Move className="size-3 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t('chat.figure.dragHint')}</span>
           {moved && (
@@ -309,7 +309,7 @@ export function FigureCard({ meta }: { meta: FigureMeta }): JSX.Element {
       )}
 
       {(meta.results.length > 0 || meta.notes.length > 0) && (
-        <div className="flex flex-col gap-2 border-t border-border/60 px-3 py-2">
+        <div className="flex flex-col gap-2 px-3 py-2">
           {moved && meta.results.length > 0 && (
             <p className="text-[10px] leading-relaxed text-amber-600 dark:text-amber-500">
               {t('chat.figure.liveNote')}

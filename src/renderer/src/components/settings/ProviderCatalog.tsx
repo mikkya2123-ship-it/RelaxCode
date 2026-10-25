@@ -205,7 +205,7 @@ export function AddProviderDialog({
           }
         }}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
+        <div className="flex items-start justify-between gap-3 px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
             {picked !== null && picked !== 'custom' && (
               <ProviderLogo id={picked.id} className="mt-[-1px] size-6 text-foreground/85" />
@@ -241,7 +241,7 @@ export function AddProviderDialog({
 
         {picked === null ? (
           <>
-            <div className="border-b border-border px-5 py-3">
+            <div className="px-5 py-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-tertiary" />
                 <Input
@@ -415,7 +415,7 @@ export function AddProviderDialog({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
               <Button
                 type="button"
                 variant="ghost"

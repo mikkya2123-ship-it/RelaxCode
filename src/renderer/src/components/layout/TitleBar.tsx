@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
-import { Copy, MessageSquare, Minus, PanelLeft, Settings, Square, X } from 'lucide-react'
+import { Copy, MessageSquare, Minus, Monitor, PanelLeft, Settings, Square, X } from 'lucide-react'
 import { useUiStore } from '@/stores/ui'
 import { useT } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
@@ -42,8 +42,10 @@ function WindowControlButton({
 export function TitleBar(): JSX.Element {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen)
   const chatOpen = useUiStore((s) => s.chatOpen)
+  const screenOpen = useUiStore((s) => s.screenOpen)
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const toggleChat = useUiStore((s) => s.toggleChat)
+  const toggleScreen = useUiStore((s) => s.toggleScreen)
   const openSettings = useUiStore((s) => s.openSettings)
   const workspace = useUiStore((s) => s.workspace)
   const [maximized, setMaximized] = useState(false)
@@ -52,7 +54,7 @@ export function TitleBar(): JSX.Element {
   useEffect(() => window.relaxcode.window.onMaximizedChanged(setMaximized), [])
 
   return (
-    <header className="drag flex h-10 shrink-0 select-none items-center justify-between border-b border-border/70 bg-background pl-1.5 pr-1">
+    <header className="drag flex h-10 shrink-0 select-none items-center justify-between bg-background pl-1.5 pr-1">
       <div className="flex min-w-0 items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -104,6 +106,22 @@ export function TitleBar(): JSX.Element {
             <Button
               variant="ghost"
               size="icon-sm"
+              onClick={toggleScreen}
+              aria-label={t('titlebar.toggleScreen')}
+              data-testid="titlebar-toggle-screen"
+              className={cn('no-drag text-muted-foreground', screenOpen && 'bg-pressed text-foreground')}
+            >
+              <Monitor className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('titlebar.toggleScreen')}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={openSettings}
               aria-label={t('titlebar.settings')}
               className="no-drag text-muted-foreground"
@@ -114,7 +132,7 @@ export function TitleBar(): JSX.Element {
           <TooltipContent side="bottom">{t('titlebar.settings')}</TooltipContent>
         </Tooltip>
 
-        <div className="ml-1 flex items-center gap-0.5 border-l border-border/70 pl-1.5">
+        <div className="ml-1 flex items-center gap-0.5 pl-1.5">
           <WindowControlButton
             label={t('titlebar.minimize')}
             onClick={() => window.relaxcode.window.minimize()}

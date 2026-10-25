@@ -20,6 +20,7 @@ export type SectionId =
   | 'chat'
   | 'files'
   | 'servers'
+  | 'mcp'
   | 'notifications'
   | 'keymap'
   | 'advanced'
@@ -41,6 +42,7 @@ export const SECTIONS: SectionDef[] = [
   { id: 'chat', label: 'settings.section.chat', icon: 'messages' },
   { id: 'files', label: 'settings.section.files', icon: 'folder' },
   { id: 'servers', label: 'settings.section.servers', icon: 'server' },
+  { id: 'mcp', label: 'settings.section.mcp', icon: 'monitor' },
   { id: 'notifications', label: 'settings.section.notifications', icon: 'bell' },
   { id: 'keymap', label: 'settings.section.keymap', icon: 'keyboard' },
   { id: 'advanced', label: 'settings.section.advanced', icon: 'sliders' }
@@ -65,6 +67,7 @@ export type Control =
   | { kind: 'keymap' }
   | { kind: 'tools' }
   | { kind: 'providers' }
+  | { kind: 'mcpServers' }
   | { kind: 'webSearchKey' }
   | { kind: 'action'; action: 'export' | 'import' | 'reveal' | 'reset' | 'clearChats' }
 
@@ -258,6 +261,46 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     keywords: 'todo план правилами'
   },
   {
+    id: 'agent.morningBriefing',
+    section: 'agent',
+    group: 'agent',
+    key: 'morningBriefing',
+    label: 'settings.agent.morningBriefing',
+    hint: 'settings.agent.morningBriefing.hint',
+    control: { kind: 'switch' },
+    keywords: 'брифинг утро дайджест briefing'
+  },
+  {
+    id: 'agent.selfReview',
+    section: 'agent',
+    group: 'agent',
+    key: 'selfReview',
+    label: 'settings.agent.selfReview',
+    hint: 'settings.agent.selfReview.hint',
+    control: { kind: 'switch' },
+    keywords: 'ревью критик коммит проверка'
+  },
+  {
+    id: 'agent.timeTravel',
+    section: 'agent',
+    group: 'agent',
+    key: 'timeTravel',
+    label: 'settings.agent.timeTravel',
+    hint: 'settings.agent.timeTravel.hint',
+    control: { kind: 'switch' },
+    keywords: 'снапшот откат машина времени'
+  },
+  {
+    id: 'agent.timelapse',
+    section: 'agent',
+    group: 'agent',
+    key: 'timelapse',
+    label: 'settings.agent.timelapse',
+    hint: 'settings.agent.timelapse.hint',
+    control: { kind: 'switch' },
+    keywords: 'тимелапс скриншоты фильм запись'
+  },
+  {
     id: 'agent.ruleServers',
     section: 'agent',
     group: 'agent',
@@ -294,6 +337,34 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.agent.recoverTextCalls.hint',
     control: { kind: 'switch' },
     keywords: 'текстовые вызовы инструментов восстановление'
+  },
+  {
+    id: 'agent.nightMaxSteps',
+    section: 'agent',
+    group: 'agent',
+    key: 'nightMaxSteps',
+    label: 'settings.agent.nightMaxSteps',
+    hint: 'settings.agent.nightMaxSteps.hint',
+    control: { kind: 'number', min: 1, max: 2000, step: 1 },
+    keywords: 'ночной автопилот лимит шагов night steps'
+  },
+  {
+    id: 'agent.nightMaxTokens',
+    section: 'agent',
+    group: 'agent',
+    key: 'nightMaxTokens',
+    label: 'settings.agent.nightMaxTokens',
+    control: { kind: 'number', min: 10000, max: 100000000, step: 10000, unit: 'tokens' },
+    keywords: 'ночной автопилот лимит токенов night tokens'
+  },
+  {
+    id: 'agent.nightTimeoutMin',
+    section: 'agent',
+    group: 'agent',
+    key: 'nightTimeoutMin',
+    label: 'settings.agent.nightTimeoutMin',
+    control: { kind: 'number', min: 1, max: 1440, step: 1, unit: 's' },
+    keywords: 'ночной автопилот лимит времени таймаут night timeout'
   },
   {
     id: 'agent.systemPromptExtra',
@@ -885,6 +956,25 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     keywords: 'панель серверов процессы'
   },
   {
+    id: 'ui.screenOpen',
+    section: 'ui',
+    group: 'ui',
+    key: 'screenOpen',
+    label: 'settings.ui.screenOpen',
+    hint: 'settings.ui.screenOpen.hint',
+    control: { kind: 'switch' },
+    keywords: 'экран панель приложений blender стрим кадры screen dock'
+  },
+  {
+    id: 'ui.screenWidth',
+    section: 'ui',
+    group: 'ui',
+    key: 'screenWidth',
+    label: 'settings.ui.screenWidth',
+    control: { kind: 'number', min: 280, max: 720, step: 8, unit: 'px' },
+    keywords: 'ширина панели экрана'
+  },
+  {
     id: 'ui.showTimestamps',
     section: 'ui',
     group: 'ui',
@@ -1138,6 +1228,17 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.servers.verifyServers.hint',
     control: { kind: 'switch' },
     keywords: 'проверка сервера fetch_url'
+  },
+
+  // ------------------------------------------------- applications & MCP servers
+  {
+    id: 'mcp.servers',
+    section: 'mcp',
+    label: 'settings.section.mcp',
+    hint: 'settings.mcp.hint',
+    control: { kind: 'mcpServers' },
+    keywords:
+      'mcp серверы приложения blender unity godot after effects коннектор инструменты внешние model context protocol'
   },
 
   // -------------------------------------------------------------- notifications

@@ -15,6 +15,11 @@ const MOCK_PORT = Number(process.env.SMOKE_MOCK_PORT || '9199')
  * Base URL with a sub-path works at the same time.
  */
 const MOCK_BASE = `http://127.0.0.1:${MOCK_PORT}/v1/${Math.random().toString(36).slice(2, 8)}`
+/** The bundled stdio MCP server the MCP scenario registers with the app. */
+const MOCK_MCP_PATH = new URL('./mock-mcp-server.mjs', import.meta.url).pathname.replace(
+  /^\/([A-Za-z]):/,
+  '$1:'
+)
 const stepResults = []
 let retryCrashSent = false
 let toolCallCount = 0
@@ -219,6 +224,21 @@ function planMockReply(messages, body = {}) {
         error:
           'Insufficient balance. Balance: 4.876500\u20bd, estimated max request cost: 5.659800\u20bd'
       })
+    }
+  }
+
+  // MCPCPTEST: the model calls a tool of a connected MCP server (the mock
+  // stdio server the harness registers through the real import/trust/connect
+  // API), then reports the flattened result.
+  if (text.includes('MCPCPTEST')) {
+    if (toolMessages.some((content) => content.includes('echo: smoke-mcp-hello'))) {
+      return { text: 'MCPCPTEST-DONE' }
+    }
+    return {
+      tool: {
+        name: 'mcp__smokemcp__echo',
+        args: JSON.stringify({ text: 'smoke-mcp-hello' })
+      }
     }
   }
 
@@ -1140,6 +1160,69 @@ async function main() {
       } catch {
         // ignore
       }
+
+      // MCP: the connector core end-to-end — the harness registers the bundled
+      // mock stdio server through the real import/trust/connect API, the model
+      // calls its echo tool, and the flattened result must come back.
+      const mcpSetup = await evaluate(`(async () => {
+        const imp = await window.relaxcode.mcp.import(JSON.stringify({
+          mcpServers: { smokemcp: { command: ${JSON.stringify(process.execPath)}, args: [${JSON.stringify(MOCK_MCP_PATH)}] } }
+        }))
+        if (!imp.ok) return 'ERROR: import ' + imp.error
+        await window.relaxcode.mcp.trust('smokemcp')
+        const conn = await window.relaxcode.mcp.connect('smokemcp')
+        if (!conn.ok) return 'ERROR: connect ' + (conn.error ?? '')
+        const server = (await window.relaxcode.mcp.list()).find((s) => s.config.name === 'smokemcp')
+        return { status: server?.status, tools: (server?.tools ?? []).map((tool) => tool.name) }
+      })()`)
+      log('mcp: mock server', mcpSetup)
+      if (
+        mcpSetup &&
+        typeof mcpSetup === 'object' &&
+        mcpSetup.status === 'ready' &&
+        mcpSetup.tools?.includes('mcp__smokemcp__echo')
+      ) {
+        stepResults.push('mcp connect ok')
+      } else {
+        stepResults.push('ERROR: mcp setup unexpected: ' + JSON.stringify(mcpSetup))
+      }
+
+      await evaluate(
+        `window.relaxcode.settings.set({ tools: { alwaysAllow: ['mcp__smokemcp__echo'] } })`
+      )
+
+      const mcpChat = await evaluate(`(async () => {
+        const store = window.__relaxcode.chat
+        const ok = await store.getState().send('MCPCPTEST')
+        if (!ok) return 'ERROR: mcp send returned false'
+        const deadline = Date.now() + 20000
+        while (Date.now() < deadline) {
+          const state = store.getState()
+          if (!state.streaming) {
+            const last = state.messages[state.messages.length - 1]
+            const text = last.parts.filter((p) => p.kind === 'text').map((p) => p.text).join('')
+            const tool = last.parts.find((p) => p.kind === 'tool')
+            return { text, toolName: tool?.name, toolStatus: tool?.status, detail: tool?.detail?.slice(0, 120) }
+          }
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        return 'ERROR: mcp chat timeout'
+      })()`)
+      log('mcp: agent call', mcpChat)
+      if (
+        mcpChat &&
+        typeof mcpChat === 'object' &&
+        mcpChat.text === 'MCPCPTEST-DONE' &&
+        mcpChat.toolName === 'mcp__smokemcp__echo' &&
+        mcpChat.toolStatus === 'ok'
+      ) {
+        stepResults.push('mcp agent call ok')
+      } else {
+        stepResults.push('ERROR: mcp agent call unexpected: ' + JSON.stringify(mcpChat))
+      }
+
+      await evaluate(`window.relaxcode.settings.set({ tools: { alwaysAllow: [] } })`)
+      await evaluate(`window.relaxcode.mcp.remove('smokemcp')`)
 
       const todoResult = await evaluate(`(async () => {
         const store = window.__relaxcode.chat
@@ -2626,7 +2709,7 @@ async function main() {
       const settingsScreenOk =
         !!settingsUiResult &&
         !settingsUiResult.error &&
-        settingsUiResult.nav === 12 &&
+        settingsUiResult.nav === 14 &&
         settingsUiResult.missing.length === 0 &&
         settingsUiResult.uiRows >= 10 &&
         settingsUiResult.matchedRows === 1 &&

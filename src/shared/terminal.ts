@@ -48,6 +48,58 @@ export function resolveTerminalShell(
   return choice === 'auto' ? 'cmd' : choice
 }
 
+/* ------------------------------------------------------------------------- *
+ * "That is a Linux command, and this is cmd.exe."
+ *
+ * Weak models write `rm -rf`, `ls` or `cat` out of habit. cmd.exe answers "not
+ * recognized as an internal or external command", the model guesses again, and
+ * the user sees a run that only produces errors. Naming the Windows equivalent
+ * in the tool result stops that loop better than any rule in the prompt.
+ * ------------------------------------------------------------------------- */
+
+const CMD_EQUIVALENTS: Record<string, string> = {
+  rm: 'Delete with `del` for files or `rmdir /s /q` for folders — or use the delete_path tool',
+  ls: 'List a folder with `dir` (or the list_dir tool)',
+  cat: 'Print a file with `type` (or the read_file tool)',
+  cp: 'Copy with `copy` or `xcopy`',
+  mv: 'Move with `move`',
+  touch: 'Create a file with the write_file tool (or `type nul > file`)',
+  pwd: 'Show the current folder with `cd`',
+  grep: 'Search text with `findstr`',
+  which: 'Locate a program with `where`',
+  ps: 'List processes with `tasklist`',
+  kill: 'Stop a process with `taskkill /PID <pid> /T /F` (or the stop_server tool)',
+  chmod: 'Windows has no POSIX permissions, so there is nothing to change here',
+  chown: 'Windows has no POSIX owners, so there is nothing to change here',
+  sudo: 'There is no sudo — ask the user to run an elevated command themselves',
+  export: 'Set a variable with `set` (it only affects that one command line)',
+  source: 'Run another script with `call`',
+  head: 'Show the start of a file with `more`, or read it with the read_file tool',
+  tail: 'Read the file with the read_file tool — there is no `tail` here',
+  sed: 'Make the change with the edit_file tool — there is no `sed` here',
+  awk: 'Do it in a node or python script — there is no `awk` here',
+  clear: 'Clear the screen with `cls`',
+  less: 'Read the file with the read_file tool instead of a pager',
+  man: 'There is no manual page; use the tool help instead'
+}
+
+/**
+ * A hint for a failed command that used a POSIX program under cmd.exe, or null
+ * when the command is fine for this shell.
+ */
+export function windowsShellHint(command: string, shell: ResolvedShell): string | null {
+  if (shell !== 'cmd') return null
+  const first = command.trim().split(/[\s|;&]+/)[0] ?? ''
+  const name = first
+    .replace(/^["'`]+|["'`]+$/g, '')
+    .replace(/^.*[\\/]/, '')
+    .toLowerCase()
+    .replace(/\.(?:exe|cmd|bat)$/, '')
+  const equivalent = CMD_EQUIVALENTS[name]
+  if (!equivalent) return null
+  return `Hint: the shell is cmd.exe, not a Linux shell, so \`${name}\` does not exist here. ${equivalent}. Do not try \`${name}\` again — use the Windows form or the matching tool.`
+}
+
 export type DangerousLevel = 'destructive' | 'catastrophic'
 
 /**

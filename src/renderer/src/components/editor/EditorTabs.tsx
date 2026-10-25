@@ -44,7 +44,7 @@ export function EditorTabs(): JSX.Element {
   }
 
   return (
-    <div className="flex h-[38px] shrink-0 items-end gap-0.5 overflow-x-auto border-b border-border bg-panel px-1.5 pt-1">
+    <div className="flex h-[38px] shrink-0 items-end gap-0.5 overflow-x-auto bg-panel px-1.5 pt-1">
       {files.map((file) => {
         const isActive = file.path === activePath
         const dirty = file.content !== file.savedContent
@@ -69,7 +69,7 @@ export function EditorTabs(): JSX.Element {
             className={cn(
               'group mb-[-1px] flex h-[30px] max-w-[200px] min-w-0 cursor-pointer select-none items-center gap-1.5 rounded-t-[10px] px-3 text-[12.5px] transition-colors duration-100',
               isActive
-                ? 'border-x border-t border-border bg-card text-foreground'
+                ? 'bg-card text-foreground'
                 : 'border border-transparent text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground'
             )}
           >

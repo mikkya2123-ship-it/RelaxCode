@@ -1,8 +1,8 @@
 import type { ApprovalMode, ChatMode } from './ipc'
-import { FIGURE_THEMES, type FigureTheme } from './figures'
+import { FIGURE_THEMES, type FigureTheme } from './figures.ts'
 import type { ThinkingLevel } from './reasoning'
 import type { TokenSaving } from './token-saving'
-import { DEFAULT_TERMINAL_SHELL, type TerminalShell } from './terminal'
+import { DEFAULT_TERMINAL_SHELL, type TerminalShell } from './terminal.ts'
 import type { WebSearchProvider } from './web-search'
 
 /* ------------------------------------------------------------------------- *
@@ -93,12 +93,27 @@ export interface AgentSettings {
   ruleTodos: boolean
   ruleServers: boolean
   ruleVerify: boolean
+  /** Once a day, when a workspace opens, the agent runs a read-only morning briefing. */
+  morningBriefing: boolean
+  /** Before a commit, a second pass reviews the diff and appends its verdict. */
+  selfReview: boolean
+  /** Before a run's first change, the project is snapshotted; the chat can roll back to it. */
+  timeTravel: boolean
+  /** While a run has a dev server up, its page is photographed into a timelapse card. */
+  timelapse: boolean
   /**
    * How much of the conversation is sent to the model: 'off' sends everything,
    * 'on' keeps a generous window, 'super' keeps the goal, the current step and a
    * digest. See shared/token-saving.ts for the exact numbers.
    */
   tokenSaving: TokenSaving
+  /**
+   * Night autopilot: full-auto within hard limits. The toggle lives in the
+   * composer; these are the limits a night run may not exceed.
+   */
+  nightMaxSteps: number
+  nightMaxTokens: number
+  nightTimeoutMin: number
 }
 
 export interface ToolsSettings {
@@ -194,6 +209,10 @@ export interface UiSettings {
   chatWidth: number
   /** Show the background-processes strip in the chat. */
   serversPanel: boolean
+  /** The Screen dock right of the chat (live view of connected apps). */
+  screenOpen: boolean
+  /** Screen dock width in pixels. */
+  screenWidth: number
 }
 
 export interface ChatSettings {
@@ -253,6 +272,7 @@ export interface AdvancedSettings {
 export interface KeymapSettings {
   toggleSidebar: string
   toggleChat: string
+  toggleScreen: string
   save: string
   newChat: string
   openSettings: string
@@ -264,6 +284,8 @@ export interface KeymapSettings {
   deleteEntry: string
   /** Close the file shown in the editor. */
   closeTab: string
+  /** Hold to dictate a message into the composer (push-to-talk). */
+  pushToTalk: string
 }
 
 export interface SettingsValues {
@@ -307,7 +329,14 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     ruleTodos: true,
     ruleServers: true,
     ruleVerify: true,
-    tokenSaving: 'off'
+    morningBriefing: false,
+    selfReview: true,
+    timeTravel: true,
+    timelapse: true,
+    tokenSaving: 'off',
+    nightMaxSteps: 100,
+    nightMaxTokens: 2000000,
+    nightTimeoutMin: 120
   },
   tools: {
     disabled: [],
@@ -378,7 +407,9 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     toolDetailsOpen: false,
     reasoningOpen: false,
     chatWidth: 384,
-    serversPanel: true
+    serversPanel: true,
+    screenOpen: false,
+    screenWidth: 360
   },
   chat: {
     defaultMode: 'agent',
@@ -440,6 +471,7 @@ export const DEFAULT_SETTINGS: SettingsValues = {
   keymap: {
     toggleSidebar: 'Ctrl+B',
     toggleChat: 'Ctrl+J',
+    toggleScreen: 'Ctrl+Shift+E',
     save: 'Ctrl+S',
     newChat: 'Ctrl+Alt+N',
     openSettings: 'Ctrl,',
@@ -447,7 +479,8 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     newFolder: 'Ctrl+Shift+N',
     rename: 'F2',
     deleteEntry: 'Delete',
-    closeTab: 'Ctrl+W'
+    closeTab: 'Ctrl+W',
+    pushToTalk: 'Ctrl+Shift+M'
   }
 }
 

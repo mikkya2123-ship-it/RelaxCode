@@ -3,17 +3,23 @@ import { useUiStore } from '@/stores/ui'
 import { useExplorerStore } from '@/stores/explorer'
 import { useEditorStore } from '@/stores/editor'
 import { useChatStore, clearStoredChats } from '@/stores/chat'
+import { useScreenStore } from '@/stores/screen'
 import { useSettingsStore } from '@/stores/settings'
 import { applyAppearance, watchSystemTheme } from '@/lib/appearance'
 import { matchesCombo } from '@/lib/keymap'
+import { useUiBridge } from '@/lib/ui-events'
+import { maybeRunMorningBriefing } from '@/lib/briefing'
+import { useVoiceStore } from '@/stores/voice'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/toaster'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { EditorArea } from '@/components/layout/EditorArea'
 import { ChatPanel } from '@/components/layout/ChatPanel'
+import { ScreenPanel } from '@/components/screen/ScreenPanel'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { SettingsScreen } from '@/components/settings/SettingsScreen'
+import { UsageScreen } from '@/components/usage/UsageScreen'
 
 /** Keys pressed inside a field belong to that field, not to the IDE. */
 function isTextInput(target: EventTarget | null): boolean {
@@ -25,9 +31,15 @@ function isTextInput(target: EventTarget | null): boolean {
 export default function App(): JSX.Element {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const toggleChat = useUiStore((s) => s.toggleChat)
+  const toggleScreen = useUiStore((s) => s.toggleScreen)
+  const screenOpen = useUiStore((s) => s.screenOpen)
   const settings = useSettingsStore((s) => s.settings)
   const settingsOpen = useUiStore((s) => s.settingsOpen)
+  const usageOpen = useUiStore((s) => s.usageOpen)
   const configured = useRef(false)
+  // Main-process requests land here: notifications, opened files, speech,
+  // chat export and scheduled prompts.
+  useUiBridge()
 
   // Shortcuts come from the settings; the defaults are the old hard-coded ones.
   useEffect(() => {
@@ -41,12 +53,17 @@ export default function App(): JSX.Element {
         return
       }
       if (inSettings) return
+      // The usage report swallows the IDE shortcuts while it is open.
+      if (useUiStore.getState().usageOpen) return
       if (matchesCombo(event, keymap.toggleSidebar)) {
         event.preventDefault()
         toggleSidebar()
       } else if (matchesCombo(event, keymap.toggleChat)) {
         event.preventDefault()
         toggleChat()
+      } else if (keymap.toggleScreen && matchesCombo(event, keymap.toggleScreen)) {
+        event.preventDefault()
+        toggleScreen()
       } else if (matchesCombo(event, keymap.save)) {
         event.preventDefault()
         void useEditorStore.getState().saveActive()
@@ -89,7 +106,7 @@ export default function App(): JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [toggleSidebar, toggleChat])
+  }, [toggleSidebar, toggleChat, toggleScreen])
 
   // `system` theme has to follow the OS while the app runs.
   useEffect(() => {
@@ -125,13 +142,24 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (!settings || configured.current) return
     configured.current = true
-    useUiStore.setState({ sidebarOpen: settings.ui.sidebarOpen, chatOpen: settings.ui.chatOpen })
+    useUiStore.setState({
+      sidebarOpen: settings.ui.sidebarOpen,
+      chatOpen: settings.ui.chatOpen,
+      screenOpen: settings.ui.screenOpen
+    })
     if (!settings.chat.persist) clearStoredChats()
   }, [settings])
 
   useEffect(() => {
     return window.relaxcode.workspace.onChanged((dirs) => {
       useExplorerStore.getState().handleExternalChange(dirs)
+    })
+  }, [])
+
+  // Screen frames arrive on the MCP channel, whatever panel is visible.
+  useEffect(() => {
+    return window.relaxcode.mcp.onEvent((event) => {
+      if (event.type === 'frame') useScreenStore.getState().addFrame(event)
     })
   }, [])
 
@@ -143,17 +171,50 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  // The briefing waits for both the workspace and the settings to be in.
+  const rootPath = useExplorerStore((s) => s.rootPath)
+  const settingsReady = useSettingsStore((s) => s.settings !== null)
+  useEffect(() => {
+    if (rootPath && settingsReady) maybeRunMorningBriefing(rootPath)
+  }, [rootPath, settingsReady])
+
+  // Push-to-talk: hold the combo to dictate, release to finish.
+  useEffect(() => {
+    const comboOf = (): string | undefined => useSettingsStore.getState().settings?.keymap.pushToTalk
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const combo = comboOf()
+      if (!combo || !matchesCombo(event, combo)) return
+      event.preventDefault()
+      useVoiceStore.getState().start()
+    }
+    const onKeyUp = (event: KeyboardEvent): void => {
+      const combo = comboOf()
+      if (!combo || !matchesCombo(event, combo)) return
+      useVoiceStore.getState().stop()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
   return (
     <TooltipProvider>
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
         <TitleBar />
-        <div className="relative flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex min-w-0 flex-1 flex-col">
-            <EditorArea />
+            <div className="workspace-shell relative m-2 min-h-0 flex-1 overflow-hidden rounded-[18px]">
+              <EditorArea />
+            </div>
           </main>
           <ChatPanel />
+          {screenOpen && <ScreenPanel />}
           {settingsOpen && <SettingsScreen />}
+          {usageOpen && <UsageScreen />}
         </div>
         <StatusBar />
       </div>

@@ -8,12 +8,19 @@
  */
 import { existsSync } from 'node:fs'
 import {
+  decodeConsoleOutput,
   findWindowsTerminal,
+  normaliseOutput,
   powershellScript,
   runInWindowsTerminal,
   spawnShell
 } from '../src/main/terminal.ts'
-import { dangerousCommand, resolveTerminalShell } from '../src/shared/terminal.ts'
+import {
+  dangerousCommand,
+  resolveTerminalShell,
+  windowsShellHint
+} from '../src/shared/terminal.ts'
+import { homeCwd } from '../src/shared/run-cwd.ts'
 
 let failed = 0
 function check(label, condition, extra) {
@@ -23,6 +30,10 @@ function check(label, condition, extra) {
     failed += 1
     console.log('FAIL -', label, extra === undefined ? '' : JSON.stringify(extra))
   }
+}
+
+function same(label, actual, expected) {
+  check(label, JSON.stringify(actual) === JSON.stringify(expected), { actual, expected })
 }
 
 function run(shell, command, cwd = process.cwd(), timeoutMs = 20000) {
@@ -138,6 +149,79 @@ check('wrapper keeps the command', script.includes('node -v'))
 check('wrapper reports native exit code', script.includes('exit $LASTEXITCODE'))
 check('wrapper reports cmdlet success', script.includes('elseif ($?)'))
 
+/* ------------------------------ output decoding ---------------------------- */
+
+same('CRLF and stray CR fold to LF', normaliseOutput('a\r\r\nb\rc\0'), 'a\nb\nc')
+
+function runBytes(shell, command, cwd = process.cwd(), timeoutMs = 20000) {
+  return new Promise((resolve) => {
+    let child
+    try {
+      child = spawnShell(shell, command, cwd)
+    } catch (error) {
+      resolve({ code: -1, bytes: Buffer.alloc(0), err: String(error) })
+      return
+    }
+    const chunks = []
+    const timer = setTimeout(() => child.kill(), timeoutMs)
+    child.stdout?.on('data', (chunk) => chunks.push(chunk))
+    child.stderr?.on('data', (chunk) => chunks.push(chunk))
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      resolve({ code: -1, bytes: Buffer.concat(chunks), err: String(error) })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code, bytes: Buffer.concat(chunks) })
+    })
+  })
+}
+
+/* ---------------------------- no workspace cwd ----------------------------- */
+
+const home = process.platform === 'win32' ? 'C:\\Users\\Misha' : '/home/misha'
+same('no workspace: the default is the home folder', homeCwd('.', home), home)
+same('no workspace: an empty cwd is home', homeCwd('', home), home)
+same(
+  'no workspace: a relative folder lives under home',
+  homeCwd('project', home),
+  process.platform === 'win32' ? 'C:\\Users\\Misha\\project' : '/home/misha/project'
+)
+same(
+  'no workspace: an absolute folder is kept',
+  homeCwd(process.platform === 'win32' ? 'D:\\tmp' : '/tmp', home),
+  process.platform === 'win32' ? 'D:\\tmp' : '/tmp'
+)
+
+/* ------------------------------ shell mismatch ----------------------------- */
+
+check(
+  'rm under cmd gets the Windows form',
+  (windowsShellHint('rm -rf dist', 'cmd') ?? '').includes('del'),
+  windowsShellHint('rm -rf dist', 'cmd')
+)
+check(
+  'ls under cmd gets the Windows form',
+  (windowsShellHint('ls -la', 'cmd') ?? '').includes('dir'),
+  windowsShellHint('ls -la', 'cmd')
+)
+check(
+  'the hint names the command it replaced',
+  (windowsShellHint('rm dist', 'cmd') ?? '').includes('`rm`'),
+  windowsShellHint('rm dist', 'cmd')
+)
+check(
+  'a hint is only for cmd',
+  windowsShellHint('rm -rf dist', 'powershell') === null &&
+    windowsShellHint('rm -rf dist', 'sh') === null &&
+    windowsShellHint('rm -rf dist', 'windows-terminal') === null
+)
+check('a Windows command gets no hint', windowsShellHint('npm run build', 'cmd') === null)
+check(
+  'a quoted exe path gets no hint',
+  windowsShellHint('"C:\\Program Files\\nodejs\\node.exe" -v', 'cmd') === null
+)
+
 /* -------------------------------- real shells ------------------------------ */
 
 if (process.platform === 'win32') {
@@ -157,6 +241,58 @@ if (process.platform === 'win32') {
 
   const cmd = await run('cmd', 'echo hello')
   check('cmd runs', cmd.code === 0 && cmd.out.includes('hello'), cmd)
+
+  // The real failure this guards: a Russian Windows writes cmd's own messages in
+  // cp866 and Python's stdout in cp1251, which used to reach the model as "??".
+  const hasPython = (await run('cmd', 'python -c "print(1)"')).code === 0
+  if (hasPython) {
+    const stdoutEncoding = await run(
+      'cmd',
+      'python -c "import os;print(os.environ.get(\'PYTHONIOENCODING\'))"'
+    )
+    check(
+      'python children are asked for UTF-8',
+      stdoutEncoding.out.includes('utf-8'),
+      stdoutEncoding
+    )
+
+    const printed = await runBytes('cmd', 'python -c "print(\'Привет, мир\')"')
+    check(
+      'python Cyrillic output reads as Cyrillic',
+      decodeConsoleOutput(printed.bytes) === 'Привет, мир',
+      { text: decodeConsoleOutput(printed.bytes), raw: printed.bytes.toString('hex') }
+    )
+
+    const fixture = async (encoding, text) =>
+      (
+        await runBytes(
+          'cmd',
+          `python -c "import sys; sys.stdout.buffer.write('${text}'.encode('${encoding}'))"`
+        )
+      ).bytes
+
+    const ansi = await fixture('cp1251', 'Привет, мир')
+    same('a cp1251 line (ANSI) decodes', decodeConsoleOutput(ansi), 'Привет, мир')
+
+    const oem = await fixture('cp866', 'Не удается найти указанный файл.')
+    same(
+      'a cp866 line (OEM) decodes',
+      decodeConsoleOutput(oem),
+      'Не удается найти указанный файл.'
+    )
+
+    same(
+      'lines with different code pages decode together',
+      decodeConsoleOutput(
+        Buffer.concat([oem, Buffer.from('\r\n'), ansi, Buffer.from('\r\n')])
+      ),
+      'Не удается найти указанный файл.\nПривет, мир'
+    )
+
+    same('a code page line ending is dropped', decodeConsoleOutput(Buffer.concat([ansi, Buffer.from('\r\n')])), 'Привет, мир')
+  } else {
+    console.log('skip - python is not on PATH: the code page fixtures are skipped')
+  }
 } else {
   const basic = await run('sh', "printf 'hello\\n'")
   check('sh runs', basic.code === 0 && basic.out.includes('hello'), basic)

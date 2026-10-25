@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+import { useUiStore } from '@/stores/ui'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 /** 1234 → "1 234"; 256000 → "256 000". Grouping comes from the system locale. */
@@ -37,6 +38,7 @@ export function ContextMeter({
   streaming?: boolean
 }): JSX.Element {
   const t = useT()
+  const openUsage = useUiStore((s) => s.openUsage)
   const known = typeof limit === 'number' && limit > 0
   const ratio = known ? Math.min(1, Math.max(0, used / (limit as number))) : 0
   const percent = Math.round(ratio * 100)
@@ -57,16 +59,18 @@ export function ContextMeter({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
+        <button
+          type="button"
           data-testid="context-meter"
           data-used={Math.round(used)}
           data-limit={known ? Math.round(limit as number) : ''}
           data-percent={known ? percent : ''}
           data-saved-messages={saved?.messages ?? 0}
           data-saved-chars={saved?.chars ?? 0}
-          role="img"
-          tabIndex={0}
           aria-label={label}
+          aria-haspopup="dialog"
+          title={t('usage.openHint')}
+          onClick={openUsage}
           className={cn(
             'mr-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md',
             'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
@@ -102,7 +106,7 @@ export function ContextMeter({
               />
             )}
           </svg>
-        </span>
+        </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" align="end" className="max-w-[260px] leading-relaxed">
         <p className="font-medium">{t('chat.context.title')}</p>
@@ -133,6 +137,7 @@ export function ContextMeter({
           </p>
         )}
         <p className="text-tertiary">{t('chat.context.source')}</p>
+        <p className="text-primary/90">{t('usage.openHint')}</p>
       </TooltipContent>
     </Tooltip>
   )

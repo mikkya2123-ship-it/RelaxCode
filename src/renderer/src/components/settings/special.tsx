@@ -122,7 +122,7 @@ export function ToolsControl({ tools, patch }: ToolsControlProps): JSX.Element {
   }
 
   return (
-    <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border">
+    <div className="overflow-hidden rounded-lg border border-border">
       {TOOL_CATALOG.map((tool) => {
         const enabled = !tools.disabled.includes(tool.name)
         return (
@@ -174,6 +174,7 @@ export function ToolsControl({ tools, patch }: ToolsControlProps): JSX.Element {
 const KEYMAP_ROWS: Array<{ key: keyof KeymapSettings; label: string }> = [
   { key: 'toggleSidebar', label: 'settings.keymap.toggleSidebar' },
   { key: 'toggleChat', label: 'settings.keymap.toggleChat' },
+  { key: 'toggleScreen', label: 'settings.keymap.toggleScreen' },
   { key: 'newFile', label: 'settings.keymap.newFile' },
   { key: 'newFolder', label: 'settings.keymap.newFolder' },
   { key: 'rename', label: 'settings.keymap.rename' },
@@ -181,7 +182,8 @@ const KEYMAP_ROWS: Array<{ key: keyof KeymapSettings; label: string }> = [
   { key: 'save', label: 'settings.keymap.save' },
   { key: 'closeTab', label: 'settings.keymap.closeTab' },
   { key: 'newChat', label: 'settings.keymap.newChat' },
-  { key: 'openSettings', label: 'settings.keymap.openSettings' }
+  { key: 'openSettings', label: 'settings.keymap.openSettings' },
+  { key: 'pushToTalk', label: 'settings.keymap.pushToTalk' }
 ]
 
 interface KeymapControlProps {
@@ -192,7 +194,7 @@ interface KeymapControlProps {
 export function KeymapControl({ keymap, patch }: KeymapControlProps): JSX.Element {
   const t = useT() as unknown as LooseTranslate
   return (
-    <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border">
+    <div className="overflow-hidden rounded-lg border border-border">
       {KEYMAP_ROWS.map((row) => (
         <div key={row.key} className="flex items-center justify-between gap-4 px-3 py-2.5">
           <span className="text-[13px] text-foreground">{t(row.label)}</span>

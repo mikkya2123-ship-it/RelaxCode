@@ -37,6 +37,48 @@ export interface FigureMeta {
   style?: { grid: boolean; theme: FigureTheme; results: boolean }
 }
 
-export type ToolMeta = WebSearchMeta | ImageMeta | FigureMeta
+/** A unified diff shown as a colored before/after card instead of raw text. */
+export interface DiffMeta {
+  kind: 'diff'
+  title?: string
+  /** File the change belongs to, workspace-relative. */
+  file?: string
+  /** Unified diff text (the `@@`/`+`/`-` lines). */
+  patch: string
+}
+
+/** A small result table, rendered as a real grid instead of a text dump. */
+export interface TableMeta {
+  kind: 'table'
+  title?: string
+  columns: string[]
+  rows: string[][]
+}
+
+/** A boxes-and-arrows diagram, already laid out and rendered to SVG. */
+export interface DiagramMeta {
+  kind: 'diagram'
+  title?: string
+  caption?: string
+  svg: string
+}
+
+/** A film of the running app during one agent run (small JPEG data URLs). */
+export interface TimelapseMeta {
+  kind: 'timelapse'
+  /** Frame 0 is the earliest shot. */
+  frames: string[]
+  /** Seconds between shots, so the card can replay at the real pace. */
+  intervalSec: number
+}
+
+export type ToolMeta =
+  | WebSearchMeta
+  | ImageMeta
+  | FigureMeta
+  | DiffMeta
+  | TableMeta
+  | DiagramMeta
+  | TimelapseMeta
 
 export type ToolMetaKind = ToolMeta['kind']

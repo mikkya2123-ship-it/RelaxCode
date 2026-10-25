@@ -1,9 +1,10 @@
-import { exec } from 'node:child_process'
-import { promises as fs } from 'node:fs'
-import { basename, dirname, join, relative, sep } from 'node:path'
+import { existsSync, promises as fs } from 'node:fs'
+import { app } from 'electron'
+import { homedir } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 import { shell } from 'electron'
 import type { BackgroundProcessInfo, ChatMode, TodoItem, TodoStatus } from '@shared/ipc'
-import type { ImageMeta, FigureMeta, ToolMeta } from '@shared/tool-meta'
+import type { ImageMeta, FigureMeta } from '@shared/tool-meta'
 import { normalizeFigureSpec, renderFigureSvg } from '@shared/figures'
 import { safeHttpUrl } from '@shared/web-search'
 import {
@@ -13,8 +14,21 @@ import {
   readImageFile,
   toDataUrl
 } from './visuals'
-import { assertInsideWorkspace, getWorkspaceRoot, IGNORED_NAMES } from './workspace'
-import { getSettings, getWebSearchApiKey, type AppSettings } from './store'
+import { getWorkspaceRoot, IGNORED_NAMES } from './workspace'
+import { homeCwd } from '@shared/run-cwd'
+import { mcpToolDefs } from './mcp'
+import { blenderPaletteDefs } from './blender-palette'
+import { backupFile, displayRelative } from './backup'
+import { GIT_TOOLS } from './tools-git'
+import { CHECK_TOOLS } from './tools-check'
+import { OBSERVE_TOOLS } from './tools-observe'
+import { SCREEN_TOOLS } from './tools-screen'
+import { DATA_TOOLS } from './tools-data'
+import { PROJECT_TOOLS } from './tools-project'
+import { UI_TOOLS } from './tools-ui'
+import { SCHEDULE_TOOLS } from './tools-schedule'
+import { WEB_TOOLS } from './tools-web'
+import { getWebSearchApiKey } from './store'
 import { runWebSearch, type WebSearchRecency } from './webSearch'
 import {
   backgroundOutput,
@@ -26,46 +40,31 @@ import {
   stopBackgroundByPid,
   stopBackgroundByPort
 } from './proc'
-import { dangerousCommand, resolveTerminalShell, type DangerousCommand } from '@shared/terminal'
 import {
-  runInWindowsTerminal,
-  shellSummary,
-  spawnShell,
-  WindowsTerminalUnavailableError
-} from './terminal'
+  dangerousCommand,
+  resolveTerminalShell,
+  windowsShellHint,
+  type DangerousCommand,
+  type ResolvedShell
+} from '@shared/terminal'
+import { decodeConsoleOutput, normaliseOutput, runInWindowsTerminal, shellSummary, spawnShell, WindowsTerminalUnavailableError } from './terminal'
+import {
+  argBool,
+  argNumber,
+  argString,
+  cfg,
+  execToolResult,
+  NO_WORKSPACE,
+  relPath,
+  resolveInWorkspace,
+  ToolError,
+  truncate,
+  type ToolContext,
+  type ToolDef,
+  type ToolResult
+} from './tool-utils'
 
-export type ToolRisk = 'read' | 'write' | 'exec' | 'delete'
-
-export interface ToolContext {
-  signal: AbortSignal
-  setTodos: (todos: TodoItem[]) => void
-  askUser: (question: string, options: string[]) => Promise<string>
-  /** Notify the UI that the set of background processes changed. */
-  emitProcesses: () => void
-  /** Streams structured progress for a rich tool card. */
-  report?: (meta: ToolMeta) => void
-  /** Per-run web-search budget and stable citation numbering. */
-  webSearch?: {
-    take: () => boolean
-    reserve: (count: number) => number[]
-  }
-}
-
-export interface ToolResult {
-  ok: boolean
-  summary: string
-  detail: string
-  /** Optional typed payload; the chat renders `web-search` results specially. */
-  meta?: ToolMeta
-}
-
-export interface ToolDef {
-  name: string
-  description: string
-  parameters: Record<string, unknown>
-  risk: ToolRisk
-  execute: (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>
-}
+export type { ToolContext, ToolDef, ToolResult, ToolRisk } from './tool-utils'
 
 const MAX_READ_BYTES = 256 * 1024
 const MAX_GLOB_RESULTS = 200
@@ -73,48 +72,9 @@ const MAX_CONTENT_RESULTS_PER_FILE = 8
 const MAX_LIST_LINES = 400
 const MAX_SCAN_FILE_SIZE = 1024 * 1024
 
-/** Live values: every one of these can be changed from the settings screen. */
-const cfg = (): AppSettings => getSettings()
-
 /** Workspace names the agent never looks at: the built-in list plus the user's. */
 function ignoredNames(): Set<string> {
   return new Set([...IGNORED_NAMES, ...cfg().files.excludeGlobs])
-}
-
-class ToolError extends Error {}
-
-function argString(args: Record<string, unknown>, key: string, required = true): string {
-  const value = args[key]
-  if (typeof value === 'string' && value.length > 0) return value
-  if (!required) return ''
-  throw new ToolError(`Missing required argument: ${key}`)
-}
-
-function argNumber(args: Record<string, unknown>, key: string): number | undefined {
-  const value = args[key]
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  return undefined
-}
-
-function argBool(args: Record<string, unknown>, key: string): boolean {
-  return args[key] === true
-}
-
-function resolveInWorkspace(input: string): string {
-  if (!getWorkspaceRoot()) throw new ToolError('No workspace is open')
-  return assertInsideWorkspace(input)
-}
-
-function relPath(absolute: string): string {
-  const root = getWorkspaceRoot()
-  if (!root) return absolute
-  const rel = relative(root, absolute)
-  return rel === '' ? '.' : rel.split(sep).join('/')
-}
-
-function truncate(text: string, limit = cfg().tools.maxOutputChars): string {
-  if (text.length <= limit) return text
-  return `${text.slice(0, limit)}\n… [truncated, ${text.length - limit} chars omitted]`
 }
 
 async function isBinaryFile(absolute: string): Promise<boolean> {
@@ -536,6 +496,55 @@ function catastrophicRefusal(guard: DangerousCommand): ToolResult {
 }
 
 /**
+ * Where a terminal command runs. With an open workspace it stays inside it (the
+ * sandbox check lives in resolveInWorkspace); with no workspace it falls back to
+ * the user's home folder, because the terminal is not a file tool and "run a
+ * harmless command" must not fail in an empty IDE.
+ */
+function commandCwd(input: string): { cwd: string; usedHome: boolean } {
+  const root = getWorkspaceRoot()
+  if (root) return { cwd: resolveInWorkspace(input), usedHome: false }
+  return { cwd: homeCwd(input, homedir()), usedHome: true }
+}
+
+/** Says where the command ran when no workspace bounded it. */
+function withCwdNote(result: ToolResult, usedHome: boolean, cwd: string): ToolResult {
+  if (!usedHome) return result
+  const note = `No folder is open in the IDE, so the command ran in ${cwd}. Open a folder if it should run inside a project.`
+  return { ...result, detail: result.detail.length > 0 ? `${result.detail}\n${note}` : note }
+}
+
+/**
+ * A command cannot run in a folder that is gone. Spawning one there fails with
+ * "spawn C:\\WINDOWS\\system32\\cmd.exe ENOENT", which sends the model hunting
+ * for a missing shell instead of the real cause, so it is answered up front.
+ */
+function missingCwdResult(cwd: string): ToolResult | null {
+  if (existsSync(cwd)) return null
+  return {
+    ok: false,
+    summary: `working directory not found: ${cwd}`,
+    detail:
+      'The folder does not exist — it may have been deleted or renamed since the chat started. Create it (or pass the right cwd) and run the command again.'
+  }
+}
+
+/**
+ * A failed command that used a Linux program under cmd.exe gets the Windows
+ * equivalent appended, because weak models otherwise retry `rm`, `ls` or `cat`
+ * until the step budget runs out.
+ */
+function withShellHint(result: ToolResult, shell: ResolvedShell, command: string): ToolResult {
+  if (result.ok) return result
+  const hint = windowsShellHint(command, shell)
+  if (!hint) return result
+  return {
+    ...result,
+    detail: result.detail.length > 0 ? `${result.detail}\n${hint}` : hint
+  }
+}
+
+/**
  * Capture a command's output for `run_command`. Used for cmd, sh and PowerShell;
  * Windows Terminal has its own runner because the tab cannot be piped.
  */
@@ -556,14 +565,17 @@ function runCapturedCommand(
       return
     }
 
-    const chunks: string[] = []
+    // Bytes, not strings: a chunk can end in the middle of a UTF-8 character,
+    // and the code page a Windows tool wrote in is only knowable per line. The
+    // whole buffer is decoded once the process is done.
+    const chunks: Buffer[] = []
     let size = 0
     let finished = false
     let timedOut = false
     let timer: ReturnType<typeof setTimeout> | undefined
 
     const output = (): string => {
-      const text = chunks.join('')
+      const text = normaliseOutput(decodeConsoleOutput(Buffer.concat(chunks)))
       return text.length > 0 ? truncate(text) : '(no output)'
     }
 
@@ -581,11 +593,13 @@ function runCapturedCommand(
     }
 
     const collect = (data: Buffer): void => {
-      const cap = cfg().tools.maxOutputChars
+      // Four bytes per character is the most UTF-8 can take, so the cap is a
+      // byte budget that still cannot exceed the character limit after decoding.
+      const cap = cfg().tools.maxOutputChars * 4
       if (size >= cap) return
-      const text = data.toString()
-      size += text.length
-      chunks.push(text)
+      const take = data.subarray(0, Math.max(0, cap - size))
+      size += take.length
+      chunks.push(take)
     }
 
     child.stdout?.on('data', collect)
@@ -601,7 +615,7 @@ function runCapturedCommand(
           summary: `command timed out after ${timeout}ms (still-running processes were killed)`,
           detail: [
             output(),
-            'Hint: this command never exits, so run_command cannot complete it. If it is a server or watcher, start it with start_server (pass the port) instead.'
+            'Hint: the command was still running when the timeout ran out. If it is a server or watcher, start it with start_server (pass the port) instead. If it is an install, a build or a download that simply needs longer, run it again with a larger timeout_ms (up to 600000).'
           ]
             .filter((part) => part.length > 0)
             .join('\n')
@@ -632,12 +646,16 @@ function runCapturedCommand(
 const runCommandTool: ToolDef = {
   name: 'run_command',
   description:
-    'Run a shell command in the workspace and wait for it to finish. Returns stdout and stderr. The shell follows Settings → Servers → "Where commands run" (Auto, PowerShell, cmd or Windows Terminal); with Windows Terminal the command opens in a visible tab and its output is still captured. Use this for installs, downloads, CLIs, builds and tests. The command and everything it starts are killed when it times out, so do NOT use this for long-running processes (dev servers, watchers, `npx serve`, `npm run dev`): they never exit and will be reported as a timeout. Use start_server for those.',
+    'Run a shell command on this computer and wait for it to finish. Returns stdout and stderr. It runs in the open workspace, or in the home folder when no folder is open. The shell follows Settings → Servers → "Where commands run" (Auto, PowerShell, cmd or Windows Terminal); with Windows Terminal the command opens in a visible tab and its output is still captured. Use this for installs, downloads, CLIs, builds and tests. The command and everything it starts are killed when it times out, so do NOT use this for long-running processes (dev servers, watchers, `npx serve`, `npm run dev`): they never exit and will be reported as a timeout. Use start_server for those.',
   parameters: {
     type: 'object',
     properties: {
       command: { type: 'string', description: 'Command line to run' },
-      cwd: { type: 'string', description: 'Working directory relative to workspace root. Default: root' },
+      cwd: {
+        type: 'string',
+        description:
+          'Working directory relative to the workspace root, or to the home folder when no workspace is open. Default: that root/home folder'
+      },
       timeout_ms: { type: 'number', description: 'Timeout in ms (default 60000, max 600000); raise it for installs and big downloads' }
     },
     required: ['command']
@@ -645,56 +663,62 @@ const runCommandTool: ToolDef = {
   risk: 'exec',
   execute: async (args, ctx) => {
     const command = argString(args, 'command')
-    const cwd = resolveInWorkspace(argString(args, 'cwd', false) || '.')
+    const { cwd, usedHome } = commandCwd(argString(args, 'cwd', false) || '.')
     const settings = cfg()
     const defaultTimeout = settings.servers.commandTimeoutMs
     const timeout = Math.min(Math.max(argNumber(args, 'timeout_ms') ?? defaultTimeout, 1000), 600000)
 
     const guard = settings.servers.protectTerminal ? dangerousCommand(command) : null
     if (guard?.level === 'catastrophic') return catastrophicRefusal(guard)
+    const missing = missingCwdResult(cwd)
+    if (missing) return missing
 
     const shell = resolveTerminalShell(settings.servers.terminalShell, undefined)
-    if (shell !== 'windows-terminal') return runCapturedCommand(shell, command, cwd, timeout, ctx)
+    const finish = (result: ToolResult): ToolResult =>
+      withCwdNote(withShellHint(result, shell, command), usedHome, cwd)
+    if (shell !== 'windows-terminal') {
+      return finish(await runCapturedCommand(shell, command, cwd, timeout, ctx))
+    }
 
     let run
     try {
       run = await runInWindowsTerminal(command, cwd, timeout, ctx.signal)
     } catch (error) {
       if (error instanceof WindowsTerminalUnavailableError) {
-        return runCapturedCommand('powershell', command, cwd, timeout, ctx)
+        return finish(await runCapturedCommand('powershell', command, cwd, timeout, ctx))
       }
       throw error
     }
-    if (run.unavailable) return runCapturedCommand('powershell', command, cwd, timeout, ctx)
+    if (run.unavailable) return finish(await runCapturedCommand('powershell', command, cwd, timeout, ctx))
     if (run.failedToStart) {
       // The tab never came up: run the command where it can at least finish,
       // and tell the model why the visible terminal was skipped.
       const fallback = await runCapturedCommand('powershell', command, cwd, timeout, ctx)
-      return {
+      return finish({
         ...fallback,
         detail: `Windows Terminal did not open a tab; the command ran in PowerShell instead.\n${fallback.detail}`
-      }
+      })
     }
-    const detail = run.output.length > 0 ? truncate(run.output) : '(no output)'
+    const detail = run.output.length > 0 ? truncate(normaliseOutput(run.output)) : '(no output)'
     if (run.timedOut) {
-      return {
+      return finish({
         ok: false,
         summary: `command timed out after ${timeout}ms (the Windows Terminal tab was closed)`,
         detail: [
           detail,
-          'Hint: this command never exits, so run_command cannot complete it. If it is a server or watcher, start it with start_server (pass the port) instead.'
+          'Hint: the command was still running when the timeout ran out. If it is a server or watcher, start it with start_server (pass the port) instead. If it is an install, a build or a download that simply needs longer, run it again with a larger timeout_ms (up to 600000).'
         ].join('\n')
-      }
+      })
     }
-    if (run.aborted) return { ok: false, summary: 'command aborted', detail }
+    if (run.aborted) return finish({ ok: false, summary: 'command aborted', detail })
     if (run.code === null) {
-      return {
+      return finish({
         ok: false,
         summary: 'the Windows Terminal tab closed before the command finished',
         detail
-      }
+      })
     }
-    return { ok: run.code === 0, summary: `exit code ${run.code}`, detail }
+    return finish({ ok: run.code === 0, summary: `exit code ${run.code}`, detail })
   }
 }
 
@@ -713,7 +737,11 @@ const startServerTool: ToolDef = {
     type: 'object',
     properties: {
       command: { type: 'string', description: 'Command line, e.g. "npm start" or "node server.js"' },
-      cwd: { type: 'string', description: 'Working directory relative to workspace root. Default: root' },
+      cwd: {
+        type: 'string',
+        description:
+          'Working directory relative to the workspace root, or to the home folder when no workspace is open. Default: that root/home folder'
+      },
       port: { type: 'number', description: 'Port the server listens on (from its code or config); the tool waits until it accepts connections' },
       wait_ms: { type: 'number', description: 'How long to wait for the port (default 15000, max 60000)' }
     },
@@ -722,13 +750,15 @@ const startServerTool: ToolDef = {
   risk: 'exec',
   execute: async (args, ctx) => {
     const command = argString(args, 'command')
-    const cwd = resolveInWorkspace(argString(args, 'cwd', false) || '.')
+    const { cwd, usedHome } = commandCwd(argString(args, 'cwd', false) || '.')
     const port = argNumber(args, 'port') ?? null
     const waitMs = Math.min(Math.max(argNumber(args, 'wait_ms') ?? 15000, 500), 60000)
 
     const settings = cfg()
     const guard = settings.servers.protectTerminal ? dangerousCommand(command) : null
     if (guard?.level === 'catastrophic') return catastrophicRefusal(guard)
+    const missing = missingCwdResult(cwd)
+    if (missing) return missing
 
     const running = listBackground().filter((item) => item.running).length
     if (running >= settings.servers.maxServers) {
@@ -745,6 +775,8 @@ const startServerTool: ToolDef = {
     }
 
     const shell = resolveTerminalShell(settings.servers.terminalShell, undefined)
+    const finish = (result: ToolResult): ToolResult =>
+      withCwdNote(withShellHint(result, shell, command), usedHome, cwd)
     let started
     if (shell === 'windows-terminal') {
       try {
@@ -761,19 +793,19 @@ const startServerTool: ToolDef = {
     const where = `pid ${started.info.pid}, id ${started.info.id}, ${shellSummary(shell)}`
 
     if (started.startupError) {
-      return { ok: false, summary: started.startupError, detail }
+      return finish({ ok: false, summary: started.startupError, detail })
     }
     if (started.exited) {
-      return {
+      return finish({
         ok: false,
         summary: `server exited with code ${started.exited.code ?? '?'} — it did not stay up`,
         detail
-      }
+      })
     }
     if (started.listening && started.listeningPort !== null) {
       const switched =
         started.requestedPort !== null && started.listeningPort !== started.requestedPort
-      return {
+      return finish({
         ok: true,
         summary:
           `listening on http://localhost:${started.listeningPort} (${where})` +
@@ -781,12 +813,12 @@ const startServerTool: ToolDef = {
             ? ` — you asked for port ${started.requestedPort}, the server listens on ${started.listeningPort}`
             : ''),
         detail
-      }
+      })
     }
     if (started.requestedPort !== null) {
       const lower = started.output.toLowerCase()
       const maybeIpv6 = lower.includes('localhost') && cfg().servers.bindHint
-      return {
+      return finish({
         ok: false,
         summary: `started (${where}) but nothing answers on port ${started.requestedPort} over 127.0.0.1. The process is still running — do NOT claim the server works.`,
         detail:
@@ -794,13 +826,13 @@ const startServerTool: ToolDef = {
           (maybeIpv6
             ? `\n\nHint: the output mentions "localhost". ${IPV6_HINT}`
             : '')
-      }
+      })
     }
-    return {
+    return finish({
       ok: true,
       summary: `started in the background (${where}), but no port was given and none was found in its output, so it is NOT verified. Check list_servers or read the output.`,
       detail
-    }
+    })
   }
 }
 
@@ -872,22 +904,6 @@ const listServersTool: ToolDef = {
   }
 }
 
-const gitCommand = (command: string, cwd: string, signal: AbortSignal): Promise<ToolResult> =>
-  new Promise<ToolResult>((resolveResult) => {
-    exec(
-      command,
-      { cwd, timeout: 30000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, signal },
-      (error, stdout, stderr) => {
-        const output = [stdout, stderr].filter((part) => part && part.length > 0).join('\n')
-        if (error) {
-          resolveResult({ ok: false, summary: 'git command failed', detail: truncate(output || String(error.message)) })
-          return
-        }
-        resolveResult({ ok: true, summary: 'ok', detail: truncate(output || '(no output)') })
-      }
-    )
-  })
-
 const gitStatusTool: ToolDef = {
   name: 'git_status',
   description: 'Show git status (short format) of the workspace.',
@@ -895,8 +911,8 @@ const gitStatusTool: ToolDef = {
   risk: 'read',
   execute: async (_args, ctx) => {
     const root = getWorkspaceRoot()
-    if (!root) throw new ToolError('No workspace is open')
-    const result = await gitCommand('git status --short --branch', root, ctx.signal)
+    if (!root) throw new ToolError(NO_WORKSPACE)
+    const result = await execToolResult('git status --short --branch', root, ctx.signal)
     return { ...result, summary: result.ok ? 'git status' : result.summary }
   }
 }
@@ -914,12 +930,12 @@ const gitDiffTool: ToolDef = {
   risk: 'read',
   execute: async (args, ctx) => {
     const root = getWorkspaceRoot()
-    if (!root) throw new ToolError('No workspace is open')
+    if (!root) throw new ToolError(NO_WORKSPACE)
     let command = 'git diff'
     if (argBool(args, 'staged')) command += ' --staged'
     const scope = argString(args, 'path', false)
     if (scope) command += ` -- "${relPath(resolveInWorkspace(scope))}"`
-    const result = await gitCommand(command, root, ctx.signal)
+    const result = await execToolResult(command, root, ctx.signal)
     return { ...result, summary: result.ok ? 'git diff' : result.summary }
   }
 }
@@ -1156,7 +1172,7 @@ const MAX_IMAGE_MB = 8
 const showImageTool: ToolDef = {
   name: 'show_image',
   description:
-    'Put a real picture into the chat next to your answer. Use it when the picture itself is the clearest explanation (a diagram, chart, photo of a thing, UI, error screenshot, a page image found by web_search, or a file in the workspace) and the user would benefit from seeing it — not for decoration. Pass a public image `url` (the "Page image" line of a web_search source, or any direct image link) or a workspace `path`. Only raster formats are supported (PNG, JPEG, GIF, WebP, AVIF, BMP). The tool downloads the picture and shows it to the user; never paste image URLs or markdown images into your reply instead.',
+    'Put a real picture into the chat next to your answer. Use it when the picture itself is the clearest explanation (a diagram, chart, photo of a thing, UI, error screenshot, a page image found by web_search, or a file in the workspace) and the user would benefit from seeing it — not for decoration. Pass a public image `url` (the "Page image" line of a web_search source, or any direct image link) or a workspace `path`. Only raster formats are supported (PNG, JPEG, GIF, WebP, AVIF, BMP). The tool downloads the picture and shows it to the user; never paste image URLs or markdown images into your reply instead. It displays pictures for the user — it is not a way for you to see or analyze a picture; attachments the user sends already reach you in the message itself.',
   parameters: {
     type: 'object',
     properties: {
@@ -1356,6 +1372,44 @@ const drawFigureTool: ToolDef = {
   }
 }
 
+const backupFileTool: ToolDef = {
+  name: 'backup_file',
+  description:
+    'Copy a workspace file into the internal backup store before a risky or wide-ranging change — a .blend scene, an .aep project, a config you are about to rewrite. The copy lives in userData/backups, the last 20 versions of a file are kept. Back up first, then change; mention the backup to the user when you make one.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File to back up, relative to the workspace root' }
+    },
+    required: ['path']
+  },
+  risk: 'write',
+  execute: async (args) => {
+    const input = argString(args, 'path')
+    const absolute = resolveInWorkspace(input)
+    const root = getWorkspaceRoot()
+    const result = backupFile(app.getPath('userData'), root, absolute)
+    if (!result.ok) {
+      const reasons: Record<string, string> = {
+        'not-found': `No file at ${input}.`,
+        'not-file': `${input} is not a file.`,
+        'outside-workspace': 'Only files inside the open workspace can be backed up.',
+        io: 'The backup could not be written.'
+      }
+      return { ok: false, summary: reasons[result.reason] ?? 'backup failed', detail: '' }
+    }
+    return {
+      ok: true,
+      summary: `backed up ${displayRelative(root, absolute)} (${formatBytes(result.bytes)})`,
+      detail: [
+        `Backup of ${displayRelative(root, absolute)} written to ${result.backupPath}.`,
+        `Keeping ${result.kept} newest backup(s) of this file.`,
+        'You can now make the change; if it goes wrong, the backup holds the original.'
+      ].join('\n')
+    }
+  }
+}
+
 export const TOOLS: ToolDef[] = [
   listDirTool,
   readFileTool,
@@ -1365,6 +1419,7 @@ export const TOOLS: ToolDef[] = [
   movePathTool,
   searchFilesTool,
   searchContentTool,
+  backupFileTool,
   runCommandTool,
   startServerTool,
   stopServerTool,
@@ -1376,7 +1431,16 @@ export const TOOLS: ToolDef[] = [
   fetchUrlTool,
   webSearchTool,
   showImageTool,
-  drawFigureTool
+  drawFigureTool,
+  ...GIT_TOOLS,
+  ...CHECK_TOOLS,
+  ...OBSERVE_TOOLS,
+  ...SCREEN_TOOLS,
+  ...DATA_TOOLS,
+  ...PROJECT_TOOLS,
+  ...UI_TOOLS,
+  ...SCHEDULE_TOOLS,
+  ...WEB_TOOLS
 ]
 
 export function toolsForMode(mode: ChatMode): ToolDef[] {
@@ -1392,7 +1456,16 @@ export function toolsForMode(mode: ChatMode): ToolDef[] {
   if (!settings.visuals.imagesEnabled) disabled.add('show_image')
   if (!settings.visuals.figuresEnabled) disabled.add('draw_figure')
   const base = mode === 'agent' ? TOOLS : TOOLS.filter((tool) => tool.risk === 'read')
-  return base.filter((tool) => !disabled.has(tool.name))
+  // Tools of connected MCP servers join the registry dynamically: only trusted,
+  // enabled and currently ready servers contribute, so the model never sees
+  // names it cannot call. Chat and plan keep their read-only rule.
+  const mcp = mcpToolDefs().filter(
+    (tool) => !disabled.has(tool.name) && (mode === 'agent' || tool.risk === 'read')
+  )
+  // The Blender recipe palette joins only when its server is connected.
+  const palette =
+    mode === 'agent' && !disabled.has('blender_recipe') ? blenderPaletteDefs() : []
+  return [...base.filter((tool) => !disabled.has(tool.name)), ...(mcp as ToolDef[]), ...palette]
 }
 
 /**
@@ -1412,6 +1485,8 @@ const TOOL_ALIASES: Record<string, string> = {
   newfile: 'write_file',
   savefile: 'write_file',
   filewrite: 'write_file',
+  createdoc: 'write_file',
+  createreadme: 'write_file',
   // editing
   edit: 'edit_file',
   editfile: 'edit_file',
@@ -1526,7 +1601,115 @@ const TOOL_ALIASES: Record<string, string> = {
   websearchtool: 'web_search',
   lookonline: 'web_search',
   gitstatus: 'git_status',
-  gitdiff: 'git_diff'
+  gitdiff: 'git_diff',
+  // git extras
+  commit: 'git_commit',
+  gitcommit: 'git_commit',
+  save: 'git_commit',
+  gitlog: 'git_log',
+  history: 'git_log',
+  gitrestore: 'git_restore',
+  revert: 'git_restore',
+  undo: 'git_restore',
+  gitblame: 'git_blame',
+  blame: 'git_blame',
+  // checks
+  runtests: 'run_tests',
+  test: 'run_tests',
+  tests: 'run_tests',
+  runtest: 'run_tests',
+  typecheck: 'type_check',
+  tsc: 'type_check',
+  lint: 'lint_check',
+  eslint: 'lint_check',
+  format: 'format_code',
+  prettier: 'format_code',
+  deps: 'deps_check',
+  outdated: 'deps_check',
+  audit: 'deps_check',
+  install: 'install_package',
+  addpackage: 'install_package',
+  npminstall: 'install_package',
+  versions: 'check_versions',
+  checkversion: 'check_versions',
+  // observation
+  logs: 'terminal_feed',
+  readlogs: 'terminal_feed',
+  terminalfeed: 'terminal_feed',
+  port: 'port_check',
+  ports: 'port_check',
+  killprocess: 'process_kill',
+  ping: 'health_check',
+  healthcheck: 'health_check',
+  // screen and browser
+  screenshot: 'screenshot_app',
+  takescreenshot: 'screenshot_app',
+  capture: 'screenshot_app',
+  mobilecheck: 'check_mobile',
+  pilot: 'browser_pilot',
+  browsepage: 'browser_pilot',
+  fillform: 'fill_form',
+  submitform: 'fill_form',
+  chaos: 'chaos_check',
+  stresstest: 'chaos_check',
+  // data and documents
+  parsejson: 'parse_structured',
+  parsecsv: 'parse_structured',
+  readdocx: 'read_docx',
+  docx: 'read_docx',
+  readxlsx: 'read_xlsx',
+  xlsx: 'read_xlsx',
+  readpdf: 'read_pdf',
+  pdf: 'read_pdf',
+  download: 'download_file',
+  wget: 'download_file',
+  db: 'db_query',
+  sql: 'db_query',
+  // project understanding
+  projectmap: 'project_map',
+  map: 'project_map',
+  notes: 'project_notes',
+  remember: 'project_notes',
+  memory: 'project_notes',
+  finddefinition: 'symbol_search',
+  definition: 'symbol_search',
+  usages: 'find_references',
+  findusages: 'find_references',
+  findsimilar: 'similar_code',
+  explaincode: 'explain_code',
+  explain: 'explain_code',
+  recent: 'recent_files',
+  recentchanges: 'recent_files',
+  snapshot: 'snapshot_project',
+  recyclebin: 'recycle_bin',
+  trash: 'recycle_bin',
+  // interaction
+  openeditor: 'open_in_editor',
+  showfile: 'open_in_editor',
+  showtable: 'show_table',
+  table: 'show_table',
+  drawscheme: 'make_diagram',
+  openlink: 'open_url',
+  exportchat: 'export_chat',
+  savechat: 'export_chat',
+  speak: 'voice_read',
+  voice: 'voice_read',
+  notification: 'notify_me',
+  alert: 'notify_me',
+  // background
+  schedule: 'schedule_task',
+  timer: 'schedule_task',
+  watcher: 'watch_folder',
+  watch: 'watch_folder',
+  dayplan: 'task_queue',
+  persistenttodos: 'task_queue',
+  // web
+  docs: 'docs_lookup',
+  searchdocs: 'docs_lookup',
+  documentation: 'docs_lookup',
+  api: 'api_call',
+  curl: 'api_call',
+  apirequest: 'api_call'
 }
 
 function normalizeToolKey(value: string): string {
@@ -1561,6 +1744,11 @@ export function resolveToolName(raw: string): string | null {
   const canonical = TOOLS.map((tool) => tool.name)
   const direct = canonical.find((name) => normalizeToolKey(name) === key)
   if (direct) return direct
+
+  // MCP tool names join the canonical set only as exact matches: fuzzy
+  // distance across hundreds of external tools would invent calls.
+  const mcpDirect = mcpToolDefs().find((tool) => normalizeToolKey(tool.name) === key)
+  if (mcpDirect) return mcpDirect.name
 
   const alias = TOOL_ALIASES[key]
   if (alias) return alias

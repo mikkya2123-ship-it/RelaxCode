@@ -160,7 +160,7 @@ export function WebSearchCard({
       </button>
 
       {expanded && (
-        <div className="animate-fade-in border-t border-border/70">
+        <div className="animate-fade-in">
           {failed && (
             <p className="flex items-start gap-1.5 px-3 py-2 text-[11px] text-destructive">
               <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
@@ -199,7 +199,7 @@ export function WebSearchCard({
           )}
 
           {sources.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-1.5 text-[10px] text-tertiary">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-[10px] text-tertiary">
               <span>{t('chat.search.sourceCount', { count: sources.length })}</span>
               {read > 0 && (
                 <>

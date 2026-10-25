@@ -9,14 +9,24 @@ import {
   type EntryCreateRequest,
   type EntryDeleteResult,
   type EntryOpResult,
+  type McpDetectedApp,
+  type McpEvent,
+  type McpImportResult,
+  type McpInvokeResult,
+  type McpSaveResult,
+  type McpServerState,
+  type McpSetupResult,
+  type McpStartResult,
   type ModelsListOptions,
   type ModelsResult,
   type OpenFolderResult,
   type PublicSettings,
   type ReadFileResult,
+  type ScreenSourceResult,
   type SettingsFileResult,
   type SettingsPatch,
   type SettingsSaveResult,
+  type SteerResult,
   type UserReply,
   type WriteFileResult
 } from '@shared/ipc'
@@ -86,9 +96,49 @@ const api = {
     stop: (id: string): Promise<BackgroundProcessInfo[]> =>
       ipcRenderer.invoke(IPC.PROCESS_STOP, id)
   },
+  mcp: {
+    list: (): Promise<McpServerState[]> => ipcRenderer.invoke(IPC.MCP_LIST),
+    save: (config: unknown): Promise<McpSaveResult> => ipcRenderer.invoke(IPC.MCP_SAVE, config),
+    remove: (name: string): Promise<McpServerState[]> => ipcRenderer.invoke(IPC.MCP_REMOVE, name),
+    connect: (name: string): Promise<McpStartResult> => ipcRenderer.invoke(IPC.MCP_CONNECT, name),
+    disconnect: (name: string): Promise<McpServerState[]> =>
+      ipcRenderer.invoke(IPC.MCP_DISCONNECT, name),
+    trust: (name: string): Promise<McpServerState[]> => ipcRenderer.invoke(IPC.MCP_TRUST, name),
+    import: (json: string): Promise<McpImportResult> => ipcRenderer.invoke(IPC.MCP_IMPORT, json),
+    exportFile: (): Promise<SettingsFileResult> => ipcRenderer.invoke(IPC.MCP_EXPORT),
+    invoke: (server: string, tool: string, argsJson: string): Promise<McpInvokeResult> =>
+      ipcRenderer.invoke(IPC.MCP_INVOKE, server, tool, argsJson),
+    detect: (appId: string): Promise<McpDetectedApp[]> =>
+      ipcRenderer.invoke(IPC.MCP_DETECT, appId),
+    setup: (appId: string): Promise<McpSetupResult> => ipcRenderer.invoke(IPC.MCP_SETUP, appId),
+    launch: (appId: string, exePath: string): Promise<McpStartResult> =>
+      ipcRenderer.invoke(IPC.MCP_LAUNCH, appId, exePath),
+    playbookGet: (server: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.MCP_PLAYBOOK_GET, server),
+    playbookSet: (server: string, text: string): Promise<boolean> =>
+      ipcRenderer.invoke(IPC.MCP_PLAYBOOK_SET, server, text),
+    onEvent: (callback: (event: McpEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, mcpEvent: McpEvent): void => callback(mcpEvent)
+      ipcRenderer.on(IPC.MCP_EVENT, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.MCP_EVENT, listener)
+      }
+    }
+  },
+  screen: {
+    getSource: (appId: string): Promise<ScreenSourceResult> =>
+      ipcRenderer.invoke(IPC.SCREEN_SOURCE, appId)
+  },
+  snapshots: {
+    /** Time travel: restore the workspace to a run snapshot. */
+    restore: (name: string): Promise<{ ok: boolean; files: number }> =>
+      ipcRenderer.invoke(IPC.SNAPSHOT_RESTORE, name)
+  },
   chat: {
     send: (request: ChatSendRequest): Promise<void> => ipcRenderer.invoke(IPC.CHAT_SEND, request),
     abort: (): void => ipcRenderer.send(IPC.CHAT_ABORT),
+    steer: (text: string): Promise<SteerResult> => ipcRenderer.invoke(IPC.CHAT_STEER, text),
+    pause: (paused: boolean): Promise<boolean> => ipcRenderer.invoke(IPC.CHAT_PAUSE, paused),
     respondApproval: (response: ApprovalResponse): void =>
       ipcRenderer.send(IPC.CHAT_APPROVAL, response),
     replyUser: (reply: UserReply): void => ipcRenderer.send(IPC.CHAT_USER_REPLY, reply),
@@ -98,6 +148,38 @@ const api = {
       return () => {
         ipcRenderer.removeListener(IPC.CHAT_EVENT, listener)
       }
+    }
+  },
+  ui: {
+    /** Answer a main-process round trip (chat export). */
+    reply: (replyId: string, value: unknown): void => ipcRenderer.send(IPC.UI_REPLY, { replyId, value }),
+    onNotify: (callback: (payload: { title: string; body?: string }) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: { title: string; body?: string }): void => callback(payload)
+      ipcRenderer.on(IPC.UI_NOTIFY, listener)
+      return () => ipcRenderer.removeListener(IPC.UI_NOTIFY, listener)
+    },
+    onOpenFile: (callback: (payload: { path: string; line?: number }) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: { path: string; line?: number }): void => callback(payload)
+      ipcRenderer.on(IPC.UI_OPEN_FILE, listener)
+      return () => ipcRenderer.removeListener(IPC.UI_OPEN_FILE, listener)
+    },
+    onSpeak: (callback: (payload: { text: string }) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: { text: string }): void => callback(payload)
+      ipcRenderer.on(IPC.UI_SPEAK, listener)
+      return () => ipcRenderer.removeListener(IPC.UI_SPEAK, listener)
+    },
+    onExportChat: (
+      callback: (payload: { replyId: string; fileName: string }) => void
+    ): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: { replyId: string; fileName: string }): void =>
+        callback(payload)
+      ipcRenderer.on(IPC.UI_EXPORT_CHAT, listener)
+      return () => ipcRenderer.removeListener(IPC.UI_EXPORT_CHAT, listener)
+    },
+    onAgentPrompt: (callback: (payload: { text: string }) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: { text: string }): void => callback(payload)
+      ipcRenderer.on(IPC.UI_AGENT_PROMPT, listener)
+      return () => ipcRenderer.removeListener(IPC.UI_AGENT_PROMPT, listener)
     }
   }
 }

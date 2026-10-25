@@ -2,7 +2,12 @@ import { spawnSync, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import net from 'node:net'
 import type { BackgroundProcessInfo } from '@shared/ipc'
-import { createWindowsTerminalHost, spawnShell, type WindowsTerminalHost } from './terminal.ts'
+import {
+  createWindowsTerminalHost,
+  decodeConsoleLine,
+  spawnShell,
+  type WindowsTerminalHost
+} from './terminal.ts'
 
 /**
  * Kill a shell command together with every process it started.
@@ -71,6 +76,8 @@ interface BackgroundEntry extends BackgroundProcessInfo {
   /** Null for commands that live in a Windows Terminal tab. */
   child: ChildProcess | null
   lines: string[]
+  /** Bytes of a line that has not ended yet (a chunk can split it anywhere). */
+  pending: Buffer
   host?: WindowsTerminalHost
   timer?: NodeJS.Timeout
 }
@@ -90,8 +97,33 @@ function pushLines(entry: BackgroundEntry, lines: string[]): void {
   }
 }
 
+/** Longest half-line kept while waiting for its newline. */
+const MAX_PENDING_BYTES = 64 * 1024
+
+/**
+ * Background output arrives as bytes: split it on newlines first and decode each
+ * complete line, so a UTF-8 character (or a cp866 error message) split across
+ * two chunks is not mangled.
+ */
 function pushOutput(entry: BackgroundEntry, chunk: Buffer): void {
-  pushLines(entry, chunk.toString().split(/\r?\n/))
+  const pending = Buffer.concat([entry.pending, chunk])
+  let start = 0
+  let index = pending.indexOf(0x0a, start)
+  while (index !== -1) {
+    pushLines(entry, [decodeConsoleLine(pending.subarray(start, index))])
+    start = index + 1
+    index = pending.indexOf(0x0a, start)
+  }
+  const rest = pending.subarray(start)
+  entry.pending =
+    rest.length > MAX_PENDING_BYTES ? rest.subarray(rest.length - MAX_PENDING_BYTES) : rest
+}
+
+/** The last line of a finished process has no closing newline. */
+function flushPending(entry: BackgroundEntry): void {
+  if (entry.pending.length === 0) return
+  pushLines(entry, [decodeConsoleLine(entry.pending)])
+  entry.pending = Buffer.alloc(0)
 }
 
 function hostAnswers(host: string, port: number, timeoutMs = 400): Promise<boolean> {
@@ -204,7 +236,8 @@ export async function startBackground(
     running: true,
     startedAt: Date.now(),
     child,
-    lines: []
+    lines: [],
+    pending: Buffer.alloc(0)
   }
   BACKGROUND.set(id, entry)
 
@@ -216,6 +249,7 @@ export async function startBackground(
     exited = { code, signal }
     entry.running = false
   })
+  child.once('close', () => flushPending(entry))
   child.once('error', () => {
     entry.running = false
   })
@@ -298,6 +332,7 @@ export async function startBackgroundInTerminal(
     startedAt: Date.now(),
     child: null,
     lines: [],
+    pending: Buffer.alloc(0),
     host
   }
   BACKGROUND.set(id, entry)

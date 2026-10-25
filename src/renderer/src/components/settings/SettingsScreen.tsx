@@ -7,6 +7,7 @@ import {
   Globe,
   Image as ImageIcon,
   Keyboard,
+  Monitor,
   Zap,
   MessagesSquare,
   Palette,
@@ -46,6 +47,7 @@ import {
   ToolsControl,
   WebSearchKeyControl
 } from './special'
+import { McpServersControl } from './McpServers'
 
 const ICONS: Record<string, JSX.Element> = {
   plug: <Plug className="size-4" />,
@@ -58,6 +60,7 @@ const ICONS: Record<string, JSX.Element> = {
   messages: <MessagesSquare className="size-4" />,
   folder: <FolderTree className="size-4" />,
   server: <Server className="size-4" />,
+  monitor: <Monitor className="size-4" />,
   bell: <Bell className="size-4" />,
   keyboard: <Keyboard className="size-4" />,
   sliders: <SlidersHorizontal className="size-4" />
@@ -144,7 +147,7 @@ export function SettingsScreen(): JSX.Element {
   return (
     <SettingsSearchProvider value={query}>
       <div className="absolute inset-0 z-40 flex flex-col bg-background" data-testid="settings-screen">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+        <header className="flex h-12 shrink-0 items-center gap-3 px-4">
           <h1 className="text-[15px] font-semibold text-foreground">{t('settings.title')}</h1>
           <div className="relative ml-2 w-[320px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-tertiary" />
@@ -190,7 +193,7 @@ export function SettingsScreen(): JSX.Element {
         </header>
 
         <div className="flex min-h-0 flex-1">
-          <nav className="w-[220px] shrink-0 overflow-y-auto border-r border-border p-2">
+          <nav className="w-[220px] shrink-0 overflow-y-auto p-2">
             {SECTIONS.map((item) => (
               <button
                 key={item.id}
@@ -308,6 +311,12 @@ function CatalogRow({ def, settings, patch, onAction }: CatalogRowProps): JSX.El
             tools={settings.tools}
             patch={(values) => void patch({ tools: values })}
           />
+        </Row>
+      )
+    case 'mcpServers':
+      return (
+        <Row def={def} wide>
+          <McpServersControl />
         </Row>
       )
     case 'webSearchKey':

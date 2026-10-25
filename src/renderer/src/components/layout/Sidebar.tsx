@@ -28,8 +28,8 @@ export function Sidebar(): JSX.Element {
   return (
     <aside
       className={cn(
-        'relative h-full shrink-0 overflow-hidden bg-panel transition-[width] duration-200 ease-out',
-        open ? 'w-[272px] border-r border-border' : 'w-0'
+        'relative h-full shrink-0 overflow-hidden bg-background transition-[width] duration-200 ease-out',
+        open ? 'w-[272px]' : 'w-0'
       )}
       aria-hidden={!open}
     >

@@ -10,6 +10,7 @@ import type {
 } from '@shared/ipc'
 import { useSettingsStore } from '@/stores/settings'
 import { useEditorStore } from '@/stores/editor'
+import { attachmentNote, type AttachmentRef } from '@shared/attachments'
 import { THINKING_LEVELS, type ThinkingLevel } from '@shared/reasoning'
 import type { ToolMeta } from '@shared/tool-meta'
 
@@ -40,7 +41,13 @@ export interface ReasoningPart {
   endedAt: number
 }
 
-export type ChatPart = TextPart | ToolPart | ReasoningPart
+/** A file the user pinned to their message; the model sees it as content parts. */
+export interface AttachmentPart {
+  kind: 'attachment'
+  attachment: AttachmentRef
+}
+
+export type ChatPart = TextPart | ToolPart | ReasoningPart | AttachmentPart
 
 export interface ChatMessage {
   id: string
@@ -48,6 +55,10 @@ export interface ChatMessage {
   parts: ChatPart[]
   status: 'streaming' | 'done' | 'error'
   error?: string
+  /** Set on a user message that interrupted a running agent (steering). */
+  steered?: boolean
+  /** Snapshot of the project taken right before this message's run changed files. */
+  snapshot?: string
   /** When the message was sent (ms since epoch); shown when timestamps are on. */
   at?: number
   promptTokens?: number
@@ -66,6 +77,13 @@ export interface PendingQuestion {
 
 export type ChatNotice = Extract<ChatEvent, { type: 'notice' }>
 
+/** A message waiting in the queue while the agent works. */
+export interface QueueItem {
+  id: string
+  text: string
+  at: number
+}
+
 /** One conversation: its own messages, its own run and its own mode. */
 export interface ChatSession {
   id: string
@@ -81,6 +99,12 @@ export interface ChatSession {
   pendingApproval: ApprovalRequest | null
   pendingQuestion: PendingQuestion | null
   notice: ChatNotice | null
+  /** Messages that will be sent once the current run finishes. */
+  queue: QueueItem[]
+  /** The run sits between steps, waiting to be resumed. */
+  paused: boolean
+  /** Night autopilot: full-auto within the limits from the agent settings. */
+  night: boolean
   /**
    * Tokens the provider counted for the whole conversation on the last answered
    * request. The context meter compares it with the model's window.
@@ -107,6 +131,9 @@ type ChatView = Pick<
   | 'notice'
   | 'contextTokens'
   | 'saved'
+  | 'queue'
+  | 'paused'
+  | 'night'
 >
 
 interface ChatState extends ChatView {
@@ -122,11 +149,19 @@ interface ChatState extends ChatView {
   clearAll: () => void
   setMode: (mode: ChatMode) => void
   setThinking: (level: ThinkingLevel) => void
-  send: (text: string) => Promise<boolean>
+  send: (text: string, chatId?: string, attachments?: AttachmentRef[]) => Promise<boolean>
   stop: () => void
+  /** Puts a message in the queue: it runs after the current task finishes. */
+  enqueue: (text: string) => void
+  /** Reorders, edits or drops one queued message. */
+  queueAction: (id: string, action: 'up' | 'down' | 'remove' | 'edit', text?: string) => void
+  /** Interrupts the running agent; false when nothing runs (send instead). */
+  steer: (text: string) => Promise<boolean>
+  togglePause: () => void
+  toggleNight: () => void
   stopProcess: (id: string) => void
   loadProcesses: () => Promise<void>
-  respondApproval: (decision: ApprovalDecision) => void
+  respondApproval: (decision: ApprovalDecision, editedArgs?: string) => void
   replyQuestion: (text: string) => void
   handleEvent: (event: ChatEvent) => void
   reset: () => void
@@ -199,7 +234,10 @@ function newSession(mode: ChatMode): ChatSession {
     todos: [],
     pendingApproval: null,
     pendingQuestion: null,
-    notice: null
+    notice: null,
+    queue: [],
+    paused: false,
+    night: false
   }
 }
 
@@ -215,7 +253,10 @@ function view(chat: ChatSession): ChatView {
     pendingQuestion: chat.pendingQuestion,
     notice: chat.notice,
     contextTokens: chat.contextTokens,
-    saved: chat.saved
+    saved: chat.saved,
+    queue: chat.queue,
+    paused: chat.paused,
+    night: chat.night
   }
 }
 
@@ -230,10 +271,18 @@ export function messageText(message: ChatMessage): string {
     .filter((part): part is TextPart => part.kind === 'text')
     .map((part) => part.text)
     .join('')
+  // The bytes of an attachment travel with their own message only; every
+  // later turn sees this note instead, so the model at least remembers that
+  // a photo was sent and what it was called.
+  const notes = message.parts
+    .filter((part): part is AttachmentPart => part.kind === 'attachment')
+    .map((part) => attachmentNote(part.attachment))
+    .join('\n')
+  const withNotes = notes === '' ? text : text === '' ? notes : `${text}\n${notes}`
   // An assistant turn that only ran tools often has no prose at all. Sending it
   // as an empty message drops it from the history, so the model forgets what it
   // drew or changed; a one-line tool digest keeps that memory.
-  if (text.trim() !== '' || message.role !== 'assistant') return text
+  if (withNotes.trim() !== '' || message.role !== 'assistant') return withNotes
   return message.parts
     .filter((part): part is ToolPart => part.kind === 'tool' && part.status !== 'running')
     .map((part) => {
@@ -359,7 +408,23 @@ function reviveSession(value: unknown): ChatSession | null {
     todos: [],
     pendingApproval: null,
     pendingQuestion: null,
-    notice: null
+    notice: null,
+    // Queued messages survive a restart, so a night plan keeps its backlog.
+    queue: Array.isArray(raw.queue)
+      ? (raw.queue as unknown[])
+          .filter((item): item is { id: string; text: string; at: number } => {
+            const entry = item as { id?: unknown; text?: unknown; at?: unknown }
+            return (
+              typeof entry?.id === 'string' &&
+              typeof entry?.text === 'string' &&
+              entry.text.trim().length > 0
+            )
+          })
+          .map((item) => ({ id: item.id, text: item.text, at: typeof item.at === 'number' ? item.at : Date.now() }))
+          .slice(0, 50)
+      : [],
+    paused: false,
+    night: raw.night === true
   }
 }
 
@@ -421,6 +486,38 @@ function persist(state: ChatState): void {
     }))
     const payload = { activeChatId: state.activeChatId, chats }
     let json = JSON.stringify(payload)
+    // Attachment bytes are the bulkiest thing a transcript can hold, so over
+    // budget they go first — the chips keep the names, kinds and sizes.
+    if (json.length > STORAGE_BUDGET) {
+      json = JSON.stringify({
+        ...payload,
+        chats: chats.map((chat) => ({
+          ...chat,
+          messages: chat.messages.map((message) => ({
+            ...message,
+            parts: message.parts.map((part) => {
+              if (part.kind === 'attachment' && (part.attachment.dataUrl || part.attachment.frames)) {
+                return {
+                  ...part,
+                  attachment: { ...part.attachment, dataUrl: undefined, frames: undefined }
+                }
+              }
+              // Diff patches and diagram SVGs are bulky payload too — over
+              // budget the cards degrade to their title row. Timelapse frames
+              // are never stored at all.
+              if (part.kind === 'tool') {
+                if (part.meta?.kind === 'diff') return { ...part, meta: undefined }
+                if (part.meta?.kind === 'timelapse') return { ...part, meta: undefined }
+                if (part.meta?.kind === 'diagram' && part.meta.svg.length > 20000) {
+                  return { ...part, meta: undefined }
+                }
+              }
+              return part
+            })
+          }))
+        }))
+      })
+    }
     if (json.length > STORAGE_BUDGET) {
       json = JSON.stringify({
         ...payload,
@@ -471,6 +568,20 @@ export const useChatStore = create<ChatState>((set, get) => {
   const activeSession = (): ChatSession => {
     const state = get()
     return state.chats.find((chat) => chat.id === state.activeChatId) ?? state.chats[0]
+  }
+
+  /** When a run ends, the next queued message of that chat starts on its own. */
+  const dispatchQueue = (chatId: string): void => {
+    window.setTimeout(() => {
+      const state = get()
+      // The main process still answers one conversation at a time.
+      if (state.chats.some((chat) => chat.streaming)) return
+      const chat = state.chats.find((item) => item.id === chatId)
+      if (!chat || chat.queue.length === 0) return
+      const [next, ...rest] = chat.queue
+      patch(chatId, (session) => ({ ...session, queue: rest }))
+      void get().send(next.text, chatId)
+    }, 80)
   }
 
   return {
@@ -535,19 +646,25 @@ export const useChatStore = create<ChatState>((set, get) => {
       patch(get().activeChatId, (chat) => ({ ...chat, thinking: level }))
     },
 
-    send: async (text) => {
+    send: async (text, chatId, attachments) => {
       const trimmed = text.trim()
+      const usable = (attachments ?? []).filter((attachment) => attachment.status !== 'error')
       const state = get()
       // The main process runs one conversation at a time.
-      if (!trimmed || state.chats.some((chat) => chat.streaming)) return false
+      if ((!trimmed && usable.length === 0) || state.chats.some((chat) => chat.streaming)) return false
       if (!useSettingsStore.getState().settings?.model) return false
 
-      const active = activeSession()
+      const active = chatId
+        ? (state.chats.find((chat) => chat.id === chatId) ?? activeSession())
+        : activeSession()
       const requestId = crypto.randomUUID()
       const userMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
-        parts: [{ kind: 'text', text: trimmed }],
+        parts: [
+          ...usable.map((attachment) => ({ kind: 'attachment', attachment }) as AttachmentPart),
+          { kind: 'text', text: trimmed } as TextPart
+        ],
         status: 'done',
         at: Date.now()
       }
@@ -564,14 +681,22 @@ export const useChatStore = create<ChatState>((set, get) => {
         .map((message) => ({ role: message.role, content: messageText(message) }))
         .filter((message) => message.content.trim() !== '')
         .slice(-(useSettingsStore.getState().settings?.agent.historyMessages ?? HISTORY_LIMIT))
-      history.push({ role: 'user', content: trimmed })
+      // Attachments ride along with their own message only — earlier turns
+      // already carry their one-line notes inside `messageText`.
+      history.push(
+        usable.length > 0 ? { role: 'user', content: trimmed, attachments: usable } : { role: 'user', content: trimmed }
+      )
 
       const editorState = useEditorStore.getState()
       const titlesFromMessages = useSettingsStore.getState().settings?.chat.titleFromMessage ?? true
 
       patch(active.id, (chat) => ({
         ...chat,
-        title: chat.title || (titlesFromMessages ? deriveTitle(trimmed) : ''),
+        title:
+          chat.title ||
+          (titlesFromMessages
+            ? deriveTitle(trimmed || usable.map((attachment) => attachment.name).join(', '))
+            : ''),
         messages: [...chat.messages, userMessage, assistantMessage],
         streaming: true,
         requestId,
@@ -586,6 +711,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           requestId,
           mode: active.mode,
           thinking: active.thinking,
+          night: active.night,
           messages: history,
           context: {
             activeFile: editorState.activePath,
@@ -601,6 +727,55 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     stop: () => {
       if (get().chats.some((chat) => chat.streaming)) window.relaxcode.chat.abort()
+    },
+
+    enqueue: (text) => {
+      const trimmed = text.trim()
+      if (trimmed.length === 0) return
+      patch(get().activeChatId, (chat) => ({
+        ...chat,
+        queue: [...chat.queue, { id: crypto.randomUUID(), text: trimmed, at: Date.now() }]
+      }))
+    },
+
+    queueAction: (id, action, text) => {
+      patch(get().activeChatId, (chat) => {
+        const index = chat.queue.findIndex((item) => item.id === id)
+        if (index < 0) return chat
+        const queue = [...chat.queue]
+        if (action === 'remove') {
+          queue.splice(index, 1)
+        } else if (action === 'edit' && text !== undefined && text.trim().length > 0) {
+          queue[index] = { ...queue[index], text: text.trim() }
+        } else if (action === 'up' && index > 0) {
+          ;[queue[index - 1], queue[index]] = [queue[index], queue[index - 1]]
+        } else if (action === 'down' && index < queue.length - 1) {
+          ;[queue[index + 1], queue[index]] = [queue[index], queue[index + 1]]
+        }
+        return { ...chat, queue }
+      })
+    },
+
+    steer: async (text) => {
+      const trimmed = text.trim()
+      if (trimmed.length === 0) return false
+      const chat = activeSession()
+      if (!chat.streaming || chat.requestId === null) return false
+      const result = await window.relaxcode.chat.steer(trimmed)
+      // The transcript entry arrives with the run's own `steer` event.
+      return result.injected
+    },
+
+    togglePause: () => {
+      const chat = activeSession()
+      const next = !chat.paused
+      patch(chat.id, (session) => ({ ...session, paused: next }))
+      void window.relaxcode.chat.pause(next)
+    },
+
+    toggleNight: () => {
+      const chat = activeSession()
+      patch(chat.id, (session) => ({ ...session, night: !session.night }))
     },
 
     stopProcess: (id) => {
@@ -621,11 +796,15 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
     },
 
-    respondApproval: (decision) => {
+    respondApproval: (decision, editedArgs) => {
       const request = get().pendingApproval
       if (!request) return
       patch(get().activeChatId, (chat) => ({ ...chat, pendingApproval: null }))
-      window.relaxcode.chat.respondApproval({ approvalId: request.approvalId, decision })
+      window.relaxcode.chat.respondApproval({
+        approvalId: request.approvalId,
+        decision,
+        ...(editedArgs ? { editedArgs } : {})
+      })
     },
 
     replyQuestion: (text) => {
@@ -642,6 +821,29 @@ export const useChatStore = create<ChatState>((set, get) => {
       const chatId = chat.id
 
       switch (event.type) {
+        case 'steer': {
+          // The interrupted run shows the message in the transcript, marked as
+          // a steering interruption rather than a fresh request.
+          patch(chatId, (session) => ({
+            ...session,
+            messages: [
+              ...session.messages,
+              {
+                id: crypto.randomUUID(),
+                role: 'user',
+                parts: [{ kind: 'text', text: event.text }],
+                status: 'done',
+                at: Date.now(),
+                steered: true
+              }
+            ]
+          }))
+          break
+        }
+        case 'paused': {
+          patch(chatId, (session) => ({ ...session, paused: event.paused }))
+          break
+        }
         case 'delta': {
           patch(chatId, (session) => ({
             ...session,
@@ -772,6 +974,48 @@ export const useChatStore = create<ChatState>((set, get) => {
           patch(chatId, (session) => ({ ...session, todos: event.todos }))
           break
         }
+        case 'run-snapshot': {
+          // Time travel: pin the snapshot to the user message that started
+          // this run, so the bubble grows a rollback button.
+          patch(chatId, (session) => {
+            const messages = [...session.messages]
+            for (let index = messages.length - 1; index >= 0; index -= 1) {
+              if (messages[index].role === 'user') {
+                messages[index] = { ...messages[index], snapshot: event.name }
+                break
+              }
+            }
+            return { ...session, messages }
+          })
+          break
+        }
+        case 'timelapse': {
+          // The film of the run lands as a virtual tool part on the answer.
+          patch(chatId, (session) => ({
+            ...session,
+            messages: session.messages.map((message) =>
+              message.role === 'assistant' && message.status === 'streaming'
+                ? {
+                    ...message,
+                    parts: [
+                      ...message.parts,
+                      {
+                        kind: 'tool' as const,
+                        callId: `timelapse-${event.requestId}`,
+                        name: 'timelapse',
+                        args: '{}',
+                        status: 'ok' as const,
+                        summary: `${event.frames.length} frames`,
+                        detail: '',
+                        meta: { kind: 'timelapse', frames: event.frames, intervalSec: event.intervalSec }
+                      }
+                    ]
+                  }
+                : message
+            )
+          }))
+          break
+        }
         case 'processes': {
           // Servers are shared by every chat, so this one is not per-chat.
           set({ processes: event.processes })
@@ -845,6 +1089,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               contextTokens: event.contextTokens
             }))
           }))
+          dispatchQueue(chatId)
           break
         }
         case 'error': {
@@ -861,6 +1106,7 @@ export const useChatStore = create<ChatState>((set, get) => {
               error: event.message
             }))
           }))
+          dispatchQueue(chatId)
           break
         }
       }

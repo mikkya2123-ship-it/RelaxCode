@@ -44,6 +44,82 @@ export function powershellScript(command: string): string {
   return `${prefix}\n${command}\n${suffix}`
 }
 
+/* ------------------------------ output decoding ----------------------------- */
+
+/**
+ * Windows console programs do not write UTF-8: cmd.exe's own messages come out
+ * in the OEM code page (cp866 on a Russian Windows) and Python's stdout in the
+ * ANSI one (cp1251). Decoding those bytes as UTF-8 hands the model "�� 㤠����
+ * ���� 㪠����� 䠩�" instead of "Не удается найти указанный файл", so it cannot
+ * tell what actually failed and starts guessing.
+ *
+ * Lines are decoded one by one, because a single stream can carry UTF-8 from a
+ * modern tool next to a cp866 line written by the shell itself.
+ */
+
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true })
+
+function legacyDecoder(label: 'ibm866' | 'windows-1251'): TextDecoder | null {
+  try {
+    return new TextDecoder(label)
+  } catch {
+    // A Node build without full ICU: the caller falls back to plain UTF-8.
+    return null
+  }
+}
+
+const OEM_DECODER = legacyDecoder('ibm866')
+const ANSI_DECODER = legacyDecoder('windows-1251')
+
+const RUSSIAN_LETTER = /[а-яё]/gi
+const CYRILLIC = /[\u0400-\u04FF]/gi
+const GARBAGE = /[\u2500-\u257F\uFFFD]/g
+
+/** How much a decoding looks like Russian prose rather than a wrong code page. */
+function russianScore(text: string): number {
+  const cyrillic = text.match(CYRILLIC)?.length ?? 0
+  const letters = text.match(RUSSIAN_LETTER)?.length ?? 0
+  const garbage = text.match(GARBAGE)?.length ?? 0
+  // Letters outside the Russian alphabet (Ў, Ќ, Ґ) mean the code page is wrong;
+  // box-drawing characters are what cp1251 text looks like when read as cp866.
+  return letters * 2 - (cyrillic - letters) * 3 - garbage * 4
+}
+
+/** One line of console output, decoded with the code page it was written in. */
+export function decodeConsoleLine(bytes: Buffer): string {
+  let text: string
+  try {
+    text = UTF8_STRICT.decode(bytes)
+  } catch {
+    const oem = OEM_DECODER?.decode(bytes) ?? ''
+    const ansi = ANSI_DECODER?.decode(bytes) ?? ''
+    text = russianScore(ansi) > russianScore(oem) ? ansi : oem || bytes.toString('utf8')
+  }
+  return text.replace(/\r+$/, '')
+}
+
+/** A whole captured output: lines decoded on their own, CRLF folded to LF. */
+export function decodeConsoleOutput(bytes: Buffer): string {
+  const lines: string[] = []
+  let start = 0
+  for (let index = 0; index < bytes.length; index += 1) {
+    if (bytes[index] !== 0x0a) continue
+    lines.push(decodeConsoleLine(bytes.subarray(start, index)))
+    start = index + 1
+  }
+  if (start < bytes.length) lines.push(decodeConsoleLine(bytes.subarray(start)))
+  return lines.join('\n')
+}
+
+/**
+ * Output that is already text (Windows Terminal logs) still needs the folding:
+ * pytest writes `\r\n` and Python translates the `\n` again, which is where the
+ * doubled CR in captured pytest output comes from. Blank lines are kept.
+ */
+export function normaliseOutput(text: string): string {
+  return text.replace(/\0/g, '').replace(/\r+\n?/g, '\n')
+}
+
 export function shellSummary(shell: ResolvedShell): string {
   switch (shell) {
     case 'powershell':
@@ -67,7 +143,14 @@ export function spawnShell(
   const common = {
     cwd,
     windowsHide: true,
-    detached: process.platform !== 'win32'
+    detached: process.platform !== 'win32',
+    // Python takes the ANSI code page when its stdout is a pipe, which is how
+    // pytest output turns into mojibake. Asking for UTF-8 fixes the output
+    // without changing how Python opens files (that would be PYTHONUTF8).
+    env:
+      process.platform === 'win32' && !process.env.PYTHONIOENCODING
+        ? { ...process.env, PYTHONIOENCODING: 'utf-8' }
+        : process.env
   }
   if (shell === 'powershell') {
     return spawn(

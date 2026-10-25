@@ -85,6 +85,10 @@ function describeNotice(event: Extract<ChatEvent, { type: 'notice' }>): string {
       return `Модель вызвала инструмент текстом вместо функции: ${event.tools.join(', ')}.`
     case 'param-dropped':
       return `Провайдер отверг параметр «${event.param}», запрос повторён без него.`
+    case 'thinking-loop':
+      return `Модель зациклилась в рассуждении: один фрагмент повторился ${event.repeats} раз подряд, поток остановлен (всего для этого подключения ${event.loops}).`
+    case 'thinking-lowered':
+      return `Размышления заранее снижены из-за прежних зацикливаний (${event.loops}): ${event.from} → ${event.to}.`
     case 'rate-limit-retry':
       return `Ограничение частоты (429): повтор ${event.attempt}/${event.maxAttempts} через ${event.seconds} с.`
     case 'server-retry':
