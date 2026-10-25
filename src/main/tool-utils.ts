@@ -6,6 +6,7 @@ import type { ToolMeta } from '@shared/tool-meta'
 import { assertInsideWorkspace, getWorkspaceRoot } from './workspace'
 import { getSettings, type AppSettings } from './store'
 import { decodeConsoleOutput } from './terminal'
+import { mirrorAgentCommand } from './term-sessions'
 
 /* ------------------------------------------------------------------------- *
  * Shared plumbing of every tool module: the shapes, the argument readers and
@@ -125,7 +126,10 @@ export function execCapture(
           .map((part) => decodeConsoleOutput(part))
           .filter((part) => part.length > 0)
           .join('\n')
-        resolve({ ok: !error, code: error ? ((error as { code?: number }).code ?? 1) : 0, output })
+        const outcome = { ok: !error, code: error ? ((error as { code?: number }).code ?? 1) : 0, output }
+        // The terminal panel shows what the AI runs as it runs it.
+        mirrorAgentCommand(command, outcome)
+        resolve(outcome)
       }
     )
   })

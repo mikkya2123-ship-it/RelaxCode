@@ -284,6 +284,8 @@ export interface KeymapSettings {
   deleteEntry: string
   /** Close the file shown in the editor. */
   closeTab: string
+  /** Show/hide the terminal dock under the editor. */
+  toggleTerminal: string
 }
 
 export interface SettingsValues {
@@ -477,7 +479,8 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     newFolder: 'Ctrl+Shift+N',
     rename: 'F2',
     deleteEntry: 'Delete',
-    closeTab: 'Ctrl+W'
+    closeTab: 'Ctrl+W',
+    toggleTerminal: 'Ctrl+`'
   }
 }
 

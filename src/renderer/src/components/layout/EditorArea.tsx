@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { AppLogo } from '@/components/ui/app-logo'
 import { EditorTabs } from '@/components/editor/EditorTabs'
 import { EditorPane } from '@/components/editor/EditorPane'
+import { TerminalPanel } from '@/components/terminal/TerminalPanel'
 import { basename } from '@/lib/utils'
 
 function RecentList(): JSX.Element | null {
@@ -82,6 +83,7 @@ export function EditorArea(): JSX.Element {
   const filesCount = useEditorStore((s) => s.files.length)
   const workspace = useUiStore((s) => s.workspace)
   const openWorkspace = useUiStore((s) => s.openWorkspace)
+  const terminalOpen = useUiStore((s) => s.terminalOpen)
   const t = useT()
 
   if (filesCount > 0) {
@@ -91,6 +93,7 @@ export function EditorArea(): JSX.Element {
         <div className="min-h-0 flex-1">
           <EditorPane />
         </div>
+        {terminalOpen && <TerminalPanel />}
       </div>
     )
   }

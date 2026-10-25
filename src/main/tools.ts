@@ -19,6 +19,7 @@ import { homeCwd } from '@shared/run-cwd'
 import { mcpToolDefs } from './mcp'
 import { blenderPaletteDefs } from './blender-palette'
 import { backupFile, displayRelative } from './backup'
+import { mirrorAgentCommand } from './term-sessions'
 import { GIT_TOOLS } from './tools-git'
 import { CHECK_TOOLS } from './tools-check'
 import { OBSERVE_TOOLS } from './tools-observe'
@@ -584,6 +585,8 @@ function runCapturedCommand(
       finished = true
       if (timer) clearTimeout(timer)
       ctx.signal.removeEventListener('abort', onAbort)
+      // The terminal panel mirrors what the AI runs.
+      mirrorAgentCommand(command, { ok: result.ok, output: result.detail })
       resolveResult(result)
     }
 

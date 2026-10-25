@@ -78,8 +78,10 @@ import { logEvent } from './logger'
 import { t } from './i18n'
 import { parseMcpToolName } from '@shared/mcp'
 import type { ChatEvent } from '@shared/ipc'
+import type { TerminalSessionInfo } from '@shared/ipc'
 import { resolveUiReply, setUiWindow } from './ui-bridge'
 import { restoreProjectSnapshot } from './tools-project'
+import { createTerminal, closeTerminal, listTerminals, stopTerminal, terminalInput } from './term-sessions'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -609,6 +611,13 @@ function registerIpc(): void {
     logEvent('info', `time travel: restored ${restored} files from snapshot ${name}`)
     return { ok: true, files: restored }
   })
+
+  // The terminal panel at the bottom of the editor.
+  ipcMain.handle(IPC.TERM_LIST, (): ReturnType<typeof listTerminals> => listTerminals())
+  ipcMain.handle(IPC.TERM_CREATE, (): TerminalSessionInfo => createTerminal())
+  ipcMain.on(IPC.TERM_INPUT, (_event, id: string, line: string) => terminalInput(id, line))
+  ipcMain.on(IPC.TERM_CLOSE, (_event, id: string) => closeTerminal(id))
+  ipcMain.on(IPC.TERM_STOP, (_event, id: string) => stopTerminal(id))
 
   setChangeListener((dirs) => {
     mainWindow?.webContents.send(IPC.WORKSPACE_CHANGED, dirs)

@@ -59,7 +59,13 @@ export const IPC = {
   UI_SPEAK: 'ui:speak',
   UI_EXPORT_CHAT: 'ui:export-chat',
   UI_AGENT_PROMPT: 'ui:agent-prompt',
-  SNAPSHOT_RESTORE: 'snapshot:restore'
+  SNAPSHOT_RESTORE: 'snapshot:restore',
+  TERM_LIST: 'term:list',
+  TERM_CREATE: 'term:create',
+  TERM_INPUT: 'term:input',
+  TERM_CLOSE: 'term:close',
+  TERM_STOP: 'term:stop',
+  TERM_OUTPUT: 'term:output'
 } as const
 
 export interface OpenFolderResult {
@@ -209,6 +215,22 @@ export interface SettingsFileResult {
 }
 
 export type ChatRole = 'system' | 'user' | 'assistant'
+
+/** One terminal tab of the IDE panel. */
+export interface TerminalSessionInfo {
+  id: string
+  title: string
+  /** `shell` takes input; `agent` is the read-only feed of the AI's commands. */
+  kind: 'shell' | 'agent'
+}
+
+/** Output chunk pushed from a terminal session to the panel. */
+export interface TerminalOutputEvent {
+  id: string
+  text: string
+  /** The command that was running has finished. */
+  done?: boolean
+}
 
 export interface ChatMessagePayload {
   role: ChatRole

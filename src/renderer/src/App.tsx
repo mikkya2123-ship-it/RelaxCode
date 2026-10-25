@@ -3,6 +3,7 @@ import { useUiStore } from '@/stores/ui'
 import { useExplorerStore } from '@/stores/explorer'
 import { useEditorStore } from '@/stores/editor'
 import { useChatStore, clearStoredChats } from '@/stores/chat'
+import { useTerminalStore } from '@/stores/terminal'
 import { useScreenStore } from '@/stores/screen'
 import { useSettingsStore } from '@/stores/settings'
 import { applyAppearance, watchSystemTheme } from '@/lib/appearance'
@@ -63,6 +64,9 @@ export default function App(): JSX.Element {
       } else if (keymap.toggleScreen && matchesCombo(event, keymap.toggleScreen)) {
         event.preventDefault()
         toggleScreen()
+      } else if (keymap.toggleTerminal && matchesCombo(event, keymap.toggleTerminal)) {
+        event.preventDefault()
+        useUiStore.getState().toggleTerminal()
       } else if (matchesCombo(event, keymap.save)) {
         event.preventDefault()
         void useEditorStore.getState().saveActive()
@@ -165,9 +169,15 @@ export default function App(): JSX.Element {
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useChatStore.getState().loadProcesses()
-    return window.relaxcode.chat.onEvent((event) => {
+    // Terminal output streams on its own channel, whatever panel is visible.
+    const offTerm = useTerminalStore.getState().subscribe()
+    const offChat = window.relaxcode.chat.onEvent((event) => {
       useChatStore.getState().handleEvent(event)
     })
+    return () => {
+      offTerm()
+      offChat()
+    }
   }, [])
 
   // The briefing waits for both the workspace and the settings to be in.

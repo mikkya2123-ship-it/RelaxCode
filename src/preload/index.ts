@@ -24,6 +24,8 @@ import {
   type ReadFileResult,
   type ScreenSourceResult,
   type SettingsFileResult,
+  type TerminalSessionInfo,
+  type TerminalOutputEvent,
   type SettingsPatch,
   type SettingsSaveResult,
   type SteerResult,
@@ -133,6 +135,19 @@ const api = {
     /** Time travel: restore the workspace to a run snapshot. */
     restore: (name: string): Promise<{ ok: boolean; files: number }> =>
       ipcRenderer.invoke(IPC.SNAPSHOT_RESTORE, name)
+  },
+  term: {
+    list: (): Promise<{ sessions: TerminalSessionInfo[]; agentLog: string[] }> =>
+      ipcRenderer.invoke(IPC.TERM_LIST),
+    create: (): Promise<TerminalSessionInfo> => ipcRenderer.invoke(IPC.TERM_CREATE),
+    input: (id: string, line: string): void => ipcRenderer.send(IPC.TERM_INPUT, id, line),
+    close: (id: string): void => ipcRenderer.send(IPC.TERM_CLOSE, id),
+    stop: (id: string): void => ipcRenderer.send(IPC.TERM_STOP, id),
+    onOutput: (callback: (event: TerminalOutputEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: TerminalOutputEvent): void => callback(payload)
+      ipcRenderer.on(IPC.TERM_OUTPUT, listener)
+      return () => ipcRenderer.removeListener(IPC.TERM_OUTPUT, listener)
+    }
   },
   chat: {
     send: (request: ChatSendRequest): Promise<void> => ipcRenderer.invoke(IPC.CHAT_SEND, request),

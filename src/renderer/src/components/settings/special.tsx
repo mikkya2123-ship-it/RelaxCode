@@ -181,6 +181,7 @@ const KEYMAP_ROWS: Array<{ key: keyof KeymapSettings; label: string }> = [
   { key: 'deleteEntry', label: 'settings.keymap.deleteEntry' },
   { key: 'save', label: 'settings.keymap.save' },
   { key: 'closeTab', label: 'settings.keymap.closeTab' },
+  { key: 'toggleTerminal', label: 'settings.keymap.toggleTerminal' },
   { key: 'newChat', label: 'settings.keymap.newChat' },
   { key: 'openSettings', label: 'settings.keymap.openSettings' }
 ]
