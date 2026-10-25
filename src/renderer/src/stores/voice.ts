@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import { recorderSupported, startRecording, type AudioSession } from '@/lib/voice'
+import { transcribeLocally } from '@/lib/local-stt'
 import { useI18nStore, translate } from '@/lib/i18n'
 import { toast } from './toast'
 
 /**
- * Push-to-talk state: hold the hotkey (or the mic button) and speak; the
- * recording is transcribed by the main process through the provider, and the
+ * Push-to-talk state: hold the hotkey (or the mic button) and speak. The
+ * recording is transcribed by whichever works: a configured provider with
+ * audio support first, then Whisper running locally inside the app. The
  * finished text lands in the composer draft.
  */
 
@@ -23,6 +25,11 @@ interface VoiceState {
 }
 
 let session: AudioSession | null = null
+let localTriedOnce = false
+
+const say = (key: 'chat.voice.downloading' | 'chat.voice.ready' | 'chat.voice.denied'): void => {
+  toast(translate(useI18nStore.getState().locale, key))
+}
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
   listening: false,
@@ -36,7 +43,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       session = await startRecording()
       set({ listening: true, text: '' })
     } catch {
-      toast(translate(useI18nStore.getState().locale, 'chat.voice.denied'))
+      say('chat.voice.denied')
     }
   },
 
@@ -54,16 +61,25 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         set({ transcribing: false })
         return
       }
-      const result = await window.relaxcode.audio.transcribe(audio)
-      if (!result.ok) {
-        toast(
-          translate(useI18nStore.getState().locale, 'chat.voice.error', { error: result.error ?? '' })
-        )
+      const finish = (text: string): void => set({ transcribing: false, ...(text ? { text } : {}) })
+
+      // 1) Any configured provider that can transcribe audio.
+      const result = await window.relaxcode.audio.transcribe(audio).catch(() => null)
+      if (result?.ok && result.text) return finish(result.text)
+
+      // 2) Whisper inside the app: works offline after a one-time download.
+      try {
+        if (!localTriedOnce) {
+          localTriedOnce = true
+          say('chat.voice.downloading')
+        }
+        const text = await transcribeLocally(audio, () => say('chat.voice.ready'))
+        if (text !== '') return finish(text)
+      } catch {
+        // Falls through to the honest error below.
       }
-      set({
-        transcribing: false,
-        ...(result.ok && result.text ? { text: result.text } : {})
-      })
+      toast(translate(useI18nStore.getState().locale, 'chat.voice.error', { error: result?.error ?? '' }))
+      finish('')
     })
   }
 }))
