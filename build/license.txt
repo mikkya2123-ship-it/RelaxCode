@@ -1,0 +1,10 @@
+RelaxCode
+Copyright (c) 2026 Misha
+
+This software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors be liable for any claim, damages or other liability.
+
+By installing you agree that the application sends your chat requests to the
+AI provider you configure in its settings, using your own API keys.

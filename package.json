@@ -3,13 +3,18 @@
   "version": "0.1.0",
   "description": "RelaxCode — AI-powered IDE",
   "main": "./out/main/index.js",
-  "author": "",
+  "author": {
+    "name": "Misha",
+    "email": "misha@localhost"
+  },
   "license": "MIT",
   "private": true,
   "scripts": {
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
     "build": "electron-vite build",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "npm run build && electron-builder --win",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -64,6 +69,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron": "^44.9.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "lucide-react": "^1.59.0",
     "monaco-editor": "^0.57.0",
@@ -79,5 +85,43 @@
     "@modelcontextprotocol/sdk": "^1.32.1",
     "chokidar": "^5.0.0",
     "openai": "^7.36.0"
+  },
+  "build": {
+    "appId": "com.relaxcode.ide",
+    "productName": "RelaxCode",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**"
+    ],
+    "asar": true,
+    "icon": "build/icon.ico",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "RelaxCode-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RelaxCode",
+      "uninstallDisplayName": "RelaxCode",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "license": "build/license.txt"
+    }
   }
 }
