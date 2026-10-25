@@ -1,38 +1,65 @@
 /**
  * Offline speech recognition: Whisper running inside the app through
- * transformers.js (WASM, no server, no key). The model downloads from
- * HuggingFace on first use and is cached afterwards.
+ * transformers.js (WASM, no server, no key). The model downloads on first
+ * use and is cached afterwards.
  *
- * Loaded through a dynamic import so the main bundle never pays for it, and
- * only when dictation actually needs the fallback.
+ * huggingface.co can be painfully slow on some networks, so the mirror goes
+ * first and the original host is the fallback; the wasm engine itself comes
+ * from jsdelivr, which is fast.
  */
 
 interface AsrPipeline {
   (audio: Float32Array, options?: Record<string, unknown>): Promise<Array<{ text: string }> | { text: string }>
 }
 
+const MODEL = 'onnx-community/whisper-base'
+const MODEL_HOSTS = ['https://hf-mirror.com', 'https://huggingface.co']
+
 let asr: AsrPipeline | null = null
 let loading: Promise<void> | null = null
 
-export async function ensureLocalAsr(onStatus: (message: string) => void): Promise<void> {
-  if (asr) return
-  if (!loading) {
-    loading = (async () => {
-      const { pipeline, env } = await import('@huggingface/transformers')
-      // The wasm backend and the model come from the CDN; nothing is bundled.
-      env.allowLocalModels = false
-      asr = (await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', {
+interface LoadProgress {
+  status?: string
+  progress?: number
+  file?: string
+}
+
+async function loadPipeline(onStatus: (message: string) => void): Promise<AsrPipeline> {
+  const { pipeline, env } = await import('@huggingface/transformers')
+  env.allowLocalModels = false
+
+  let lastError: unknown = null
+  for (const host of MODEL_HOSTS) {
+    try {
+      env.remoteHost = host
+      return (await pipeline('automatic-speech-recognition', MODEL, {
         dtype: 'q8',
-        progress_callback: (info: { status?: string; progress?: number; file?: string }) => {
-          if (info.status === 'progress' && typeof info.progress === 'number' && info.progress >= 99) {
+        progress_callback: (info: LoadProgress) => {
+          // One line per finished file is enough; per-cent chatter would
+          // drown the user in toasts.
+          if (info.status === 'done' && info.file && info.file.endsWith('.onnx')) {
             onStatus('chat.voice.ready')
           }
         }
       })) as unknown as AsrPipeline
-    })().catch((error) => {
-      loading = null
-      throw error
-    })
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError ?? new Error('model download failed')
+}
+
+export async function ensureLocalAsr(onStatus: (message: string) => void): Promise<void> {
+  if (asr) return
+  if (!loading) {
+    loading = loadPipeline(onStatus)
+      .then((loaded) => {
+        asr = loaded
+      })
+      .catch((error) => {
+        loading = null
+        throw error
+      })
   }
   await loading
 }

@@ -25,10 +25,9 @@ interface VoiceState {
 }
 
 let session: AudioSession | null = null
-let localTriedOnce = false
 
-const say = (key: 'chat.voice.downloading' | 'chat.voice.ready' | 'chat.voice.denied'): void => {
-  toast(translate(useI18nStore.getState().locale, key))
+const say = (key: string): void => {
+  toast(translate(useI18nStore.getState().locale, key as 'chat.voice.ready'))
 }
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
@@ -62,23 +61,27 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
         return
       }
       const finish = (text: string): void => set({ transcribing: false, ...(text ? { text } : {}) })
+      const locale = () => useI18nStore.getState().locale
 
       // 1) Any configured provider that can transcribe audio.
       const result = await window.relaxcode.audio.transcribe(audio).catch(() => null)
       if (result?.ok && result.text) return finish(result.text)
 
       // 2) Whisper inside the app: works offline after a one-time download.
+      let localError: string | null = null
       try {
-        if (!localTriedOnce) {
-          localTriedOnce = true
-          say('chat.voice.downloading')
-        }
-        const text = await transcribeLocally(audio, () => say('chat.voice.ready'))
+        say('chat.voice.downloading')
+        const text = await transcribeLocally(audio, (key) => say(key))
         if (text !== '') return finish(text)
-      } catch {
-        // Falls through to the honest error below.
+      } catch (error) {
+        localError = (error instanceof Error ? error.message : String(error)).slice(0, 140)
       }
-      toast(translate(useI18nStore.getState().locale, 'chat.voice.error', { error: result?.error ?? '' }))
+      // The honest ending: which of the two roads failed and why.
+      if (localError) {
+        toast(translate(locale(), 'chat.voice.localError', { error: localError }))
+      } else {
+        toast(translate(locale(), 'chat.voice.error', { error: result?.error ?? '' }))
+      }
       finish('')
     })
   }
