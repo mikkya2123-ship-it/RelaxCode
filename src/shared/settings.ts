@@ -284,8 +284,6 @@ export interface KeymapSettings {
   deleteEntry: string
   /** Close the file shown in the editor. */
   closeTab: string
-  /** Hold to dictate a message into the composer (push-to-talk). */
-  pushToTalk: string
 }
 
 export interface SettingsValues {
@@ -479,8 +477,7 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     newFolder: 'Ctrl+Shift+N',
     rename: 'F2',
     deleteEntry: 'Delete',
-    closeTab: 'Ctrl+W',
-    pushToTalk: 'Ctrl+Shift+M'
+    closeTab: 'Ctrl+W'
   }
 }
 

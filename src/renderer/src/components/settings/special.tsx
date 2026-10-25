@@ -182,8 +182,7 @@ const KEYMAP_ROWS: Array<{ key: keyof KeymapSettings; label: string }> = [
   { key: 'save', label: 'settings.keymap.save' },
   { key: 'closeTab', label: 'settings.keymap.closeTab' },
   { key: 'newChat', label: 'settings.keymap.newChat' },
-  { key: 'openSettings', label: 'settings.keymap.openSettings' },
-  { key: 'pushToTalk', label: 'settings.keymap.pushToTalk' }
+  { key: 'openSettings', label: 'settings.keymap.openSettings' }
 ]
 
 interface KeymapControlProps {

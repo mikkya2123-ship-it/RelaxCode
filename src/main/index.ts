@@ -32,9 +32,7 @@ import {
 } from '@shared/ipc'
 import {
   addRecentWorkspace,
-  activeProvider,
   applySettingsPatch,
-  getApiKey,
   getPublicSettings,
   getSettings,
   importSettings,
@@ -80,7 +78,6 @@ import { logEvent } from './logger'
 import { t } from './i18n'
 import { parseMcpToolName } from '@shared/mcp'
 import type { ChatEvent } from '@shared/ipc'
-import type { AudioTranscribeResult } from '@shared/ipc'
 import { resolveUiReply, setUiWindow } from './ui-bridge'
 import { restoreProjectSnapshot } from './tools-project'
 
@@ -612,64 +609,6 @@ function registerIpc(): void {
     logEvent('info', `time travel: restored ${restored} files from snapshot ${name}`)
     return { ok: true, files: restored }
   })
-
-  // Push-to-talk: the recorded audio goes to a transcription endpoint. The
-  // active provider goes first; if it cannot transcribe, every other provider
-  // with a stored key gets a chance, so dictation works whenever ANY of the
-  // configured providers supports audio.
-  ipcMain.handle(
-    IPC.AUDIO_TRANSCRIBE,
-    async (_event, audio: ArrayBuffer): Promise<AudioTranscribeResult> => {
-      if (!(audio instanceof ArrayBuffer) || audio.byteLength < 512) {
-        return { ok: false, error: 'empty-recording' }
-      }
-      const settings = getSettings()
-      const active = activeProvider(settings)
-      // Active first, then the rest; keys are required to even try.
-      const candidates = [active, ...settings.providers.filter((item) => item.id !== active.id)]
-        .filter((item) => !!getApiKey(item.id) && typeof item.baseUrl === 'string')
-
-      let lastError = 'no-provider'
-      for (const provider of candidates.slice(0, 5)) {
-        const apiKey = getApiKey(provider.id)
-        if (!apiKey) continue
-        const url = `${provider.baseUrl.replace(/\/$/, '')}/audio/transcriptions`
-        // whisper-1 is the OpenAI-compatible default; Groq-style providers
-        // want their own id, so a "model" complaint gets one retry.
-        for (const model of ['whisper-1', 'whisper-large-v3']) {
-          try {
-            const form = new FormData()
-            form.append('file', new Blob([audio], { type: 'audio/webm' }), 'dictation.webm')
-            form.append('model', model)
-            const response = await fetch(url, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${apiKey}` },
-              body: form,
-              signal: AbortSignal.timeout(90000)
-            })
-            if (response.ok) {
-              const payload = (await response.json()) as { text?: unknown }
-              if (typeof payload.text === 'string' && payload.text.trim() !== '') {
-                return { ok: true, text: payload.text.trim() }
-              }
-              lastError = 'empty-text'
-              break
-            }
-            const body = (await response.text()).slice(0, 200)
-            // A different model id may fix it; anything else means this
-            // provider does not transcribe and the next one is tried.
-            if ((response.status === 400 || response.status === 404) && /model/i.test(body)) continue
-            lastError = `HTTP ${response.status}`
-            break
-          } catch (error) {
-            lastError = error instanceof Error ? error.message : String(error)
-            break
-          }
-        }
-      }
-      return { ok: false, error: lastError }
-    }
-  )
 
   setChangeListener((dirs) => {
     mainWindow?.webContents.send(IPC.WORKSPACE_CHANGED, dirs)

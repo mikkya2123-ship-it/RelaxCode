@@ -59,8 +59,7 @@ export const IPC = {
   UI_SPEAK: 'ui:speak',
   UI_EXPORT_CHAT: 'ui:export-chat',
   UI_AGENT_PROMPT: 'ui:agent-prompt',
-  SNAPSHOT_RESTORE: 'snapshot:restore',
-  AUDIO_TRANSCRIBE: 'audio:transcribe'
+  SNAPSHOT_RESTORE: 'snapshot:restore'
 } as const
 
 export interface OpenFolderResult {
@@ -201,14 +200,6 @@ export interface ModelsListOptions {
 }
 
 /** Result of exporting or importing the settings file. */
-export interface AudioTranscribeResult {
-  ok: boolean
-  /** The recognized text, when the provider returned one. */
-  text?: string
-  /** Why it failed: provider cannot transcribe, network, no key… */
-  error?: string
-}
-
 export interface SettingsFileResult {
   ok: boolean
   /** Path that was written/read, when the operation went through. */

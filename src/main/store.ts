@@ -715,7 +715,6 @@ function sanitizeKeymap(value: unknown): Partial<SettingsValues['keymap']> {
   if (raw.rename !== undefined) out.rename = asString(raw.rename, d.rename, 40)
   if (raw.deleteEntry !== undefined) out.deleteEntry = asString(raw.deleteEntry, d.deleteEntry, 40)
   if (raw.closeTab !== undefined) out.closeTab = asString(raw.closeTab, d.closeTab, 40)
-  if (raw.pushToTalk !== undefined) out.pushToTalk = asString(raw.pushToTalk, d.pushToTalk, 40)
   return out
 }
 

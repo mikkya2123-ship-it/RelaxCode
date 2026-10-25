@@ -9,7 +9,6 @@ import { applyAppearance, watchSystemTheme } from '@/lib/appearance'
 import { matchesCombo } from '@/lib/keymap'
 import { useUiBridge } from '@/lib/ui-events'
 import { maybeRunMorningBriefing } from '@/lib/briefing'
-import { useVoiceStore } from '@/stores/voice'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/toaster'
 import { TitleBar } from '@/components/layout/TitleBar'
@@ -177,28 +176,6 @@ export default function App(): JSX.Element {
   useEffect(() => {
     if (rootPath && settingsReady) maybeRunMorningBriefing(rootPath)
   }, [rootPath, settingsReady])
-
-  // Push-to-talk: hold the combo to dictate, release to finish.
-  useEffect(() => {
-    const comboOf = (): string | undefined => useSettingsStore.getState().settings?.keymap.pushToTalk
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const combo = comboOf()
-      if (!combo || !matchesCombo(event, combo)) return
-      event.preventDefault()
-      useVoiceStore.getState().start()
-    }
-    const onKeyUp = (event: KeyboardEvent): void => {
-      const combo = comboOf()
-      if (!combo || !matchesCombo(event, combo)) return
-      useVoiceStore.getState().stop()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-    }
-  }, [])
 
   return (
     <TooltipProvider>
