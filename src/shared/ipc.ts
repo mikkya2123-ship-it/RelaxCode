@@ -259,6 +259,12 @@ export interface ChatSendRequest {
   context: {
     activeFile?: string | null
     openFiles?: string[]
+    /**
+     * The task list of the previous run, when it had unfinished items: long
+     * jobs (scene builds, refactors) span runs, and the new run must inherit
+     * the plan instead of starting blind.
+     */
+    previousTodos?: TodoItem[]
   }
 }
 

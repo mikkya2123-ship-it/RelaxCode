@@ -309,7 +309,9 @@ async function setupBlender(): Promise<McpSetupResult> {
     defaultRisk: 'exec',
     toolRisk: {},
     disabledTools: [],
-    timeoutMs: 120000
+    // Scene builds (forests, particle systems) regularly run over a minute
+    // of Blender work; a too-eager timeout kills the call mid-build.
+    timeoutMs: 300000
   })
   ensurePlaybook(BLENDER_SERVER_NAME, BLENDER_PLAYBOOK)
 

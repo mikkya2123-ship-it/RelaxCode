@@ -82,7 +82,13 @@ function loadFile(): void {
   if (map && typeof map === 'object' && !Array.isArray(map)) {
     for (const [name, value] of Object.entries(map as Record<string, unknown>)) {
       const config = normalizeMcpServer(value, name)
-      if (config) servers.set(name, freshServer(config))
+      if (!config) continue
+      // One-time migration: scene builds outgrew the old 120s blender
+      // default, which killed long runs mid-build.
+      if (config.name === 'blender' && config.timeoutMs <= 120000) {
+        config.timeoutMs = 300000
+      }
+      servers.set(name, freshServer(config))
     }
   }
 }

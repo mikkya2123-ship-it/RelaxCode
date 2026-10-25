@@ -266,6 +266,33 @@ function deriveTitle(text: string): string {
   return oneLine.length > TITLE_LIMIT ? `${oneLine.slice(0, TITLE_LIMIT - 1)}…` : oneLine
 }
 
+/**
+ * A short "what was called with what" digest. In later turns the model sees
+ * only these one-liners instead of full tool results — without the args it
+ * genuinely cannot remember what it did to the scene ("did I already add
+ * foliage?"), which reads as amnesia.
+ */
+function argsDigest(argsJson: string): string {
+  try {
+    const parsed: unknown = JSON.parse(argsJson)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return ''
+    const pairs: string[] = []
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (pairs.length >= 3) break
+      if (typeof value === 'string' && value.length > 0) {
+        pairs.push(`${key}=${value.length > 60 ? `${value.slice(0, 59)}…` : value}`)
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        pairs.push(`${key}=${value}`)
+      } else if (value && typeof value === 'object') {
+        pairs.push(`${key}={…}`)
+      }
+    }
+    return pairs.join(' ')
+  } catch {
+    return ''
+  }
+}
+
 export function messageText(message: ChatMessage): string {
   const text = message.parts
     .filter((part): part is TextPart => part.kind === 'text')
@@ -298,7 +325,8 @@ export function messageText(message: ChatMessage): string {
             .join(' · ')
         : ''
       const outcome = part.status === 'error' ? 'failed' : part.summary || 'done'
-      return `[${part.name}: ${outcome}${figureDigest ? ` (${figureDigest})` : ''}]`
+      const args = argsDigest(part.args)
+      return `[${part.name}: ${outcome}${args ? ` · ${args}` : ''}${figureDigest ? ` (${figureDigest})` : ''}]`
     })
     .join('\n')
 }
@@ -715,7 +743,12 @@ export const useChatStore = create<ChatState>((set, get) => {
           messages: history,
           context: {
             activeFile: editorState.activePath,
-            openFiles: editorState.files.map((file) => file.path)
+            openFiles: editorState.files.map((file) => file.path),
+            // A half-done plan rides along: the next run continues it instead
+            // of claiming the job finished.
+            ...(active.todos.some((todo) => todo.status !== 'completed') && active.todos.length > 0
+              ? { previousTodos: active.todos }
+              : {})
           }
         })
         .catch(() => {

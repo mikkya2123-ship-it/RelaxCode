@@ -25,6 +25,7 @@ import { answerLanguageMismatch, expectedAnswerLanguage } from '@shared/language
 import { IPC } from '@shared/ipc'
 import { requestUi, pushUi } from './ui-bridge'
 import { projectNotesDigest } from './tools-project'
+import { listStates } from './mcp'
 import { dangerousCommand, resolveTerminalShell, type DangerousCommand } from '@shared/terminal'
 import { shellSummary } from './terminal'
 import { trimForWire } from './token-saving'
@@ -267,6 +268,22 @@ async function buildSystemPrompt(
   const notes = projectNotesDigest()
   if (notes) parts.push(notes)
 
+  // The previous run left an unfinished task list: hand it over, so a long
+  // job (a scene build, a refactor) continues instead of restarting blind.
+  const previousTodos = (request.context.previousTodos ?? []).filter(
+    (todo) => typeof todo?.content === 'string' && todo.content.trim() !== ''
+  )
+  if (previousTodos.length > 0) {
+    const unfinished = previousTodos.filter((todo) => todo.status !== 'completed')
+    const done = previousTodos.length - unfinished.length
+    parts.push(
+      `The previous run ended with a task list: ${done} done, ${unfinished.length} left. Continue this plan instead of starting over — restore it first with todo_write, then work through the remaining items:`
+    )
+    for (const todo of unfinished.slice(0, 12)) {
+      parts.push(`- [ ] ${todo.content}`)
+    }
+  }
+
   parts.push(modeGuidance(mode, settings))
 
   if (request.night === true) {
@@ -285,6 +302,15 @@ async function buildSystemPrompt(
     )
   }
   rules.push('- Prefer search_content / search_files over guessing paths.')
+  if (
+    listStates().some(
+      (state) => state.config.name === 'blender' && state.status === 'ready' && state.config.trusted && state.config.enabled
+    )
+  ) {
+    rules.push(
+      '- Blender scene work has a discipline. (1) Build in several SMALLER code executions — one object or material group per call; one giant script freezes Blender for minutes and may kill the session. (2) A scene is NOT done while anything from the request is missing: if the user asked for a birch grove, bare trunks without foliage, an untextured ground or absent lighting mean you keep working, not report done. (3) Before the final answer, render or screenshot the scene and check it against EVERY item of the request and your task list; fix what is missing, then verify again.'
+    )
+  }
   if (request.messages.some((message) => (message.attachments ?? []).length > 0)) {
     rules.push(
       '- The user attached files to their message: pictures and video keyframes arrive as image parts inside the message itself, and text files arrive inline under [file: name]. Never call show_image, read_file or any other tool to open or display them. If an attached picture did not actually reach you (you see only its [image: …] name label and no image), say so in one plain sentence — never guess what it depicts from the file name.'
