@@ -5,8 +5,12 @@ import { fileURLToPath } from 'node:url'
 
 /** Everything Snitch owns lives under this folder; nothing outside is written. */
 export const SNITCH_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-export const DATA_DIR = join(SNITCH_ROOT, 'data')
-export const OUT_DIR = join(SNITCH_ROOT, 'out')
+export const DATA_DIR = process.env.SNITCH_DATA_DIR
+  ? resolve(process.env.SNITCH_DATA_DIR)
+  : join(SNITCH_ROOT, 'data')
+export const OUT_DIR = process.env.SNITCH_OUT_DIR
+  ? resolve(process.env.SNITCH_OUT_DIR)
+  : join(SNITCH_ROOT, 'out')
 export const PUBLIC_DIR = join(SNITCH_ROOT, 'public')
 export const ARCHIVE_DIR = join(DATA_DIR, 'archive')
 export const STATE_FILE = join(DATA_DIR, 'state.json')

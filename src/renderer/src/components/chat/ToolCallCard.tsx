@@ -30,6 +30,7 @@ import type { ToolPart } from '@/stores/chat'
 import { cn } from '@/lib/utils'
 import { WebSearchCard } from './WebSearchCard'
 import { ImageCard } from './ImageCard'
+import { PosterCard } from './PosterCard'
 import { FigureCard } from './FigureCard'
 import { DiffCard, TableCard, DiagramCard, TimelapseCard } from './DataCards'
 
@@ -82,6 +83,7 @@ function iconFor(name: string): LucideIcon {
     case 'fetch_url':
       return Globe
     case 'show_image':
+    case 'show_poster':
       return ImageIcon
     case 'draw_figure':
       return Ruler
@@ -115,6 +117,7 @@ export function ToolCallCard({
   const Icon = iconFor(part.name)
 
   if (part.meta?.kind === 'image') return <ImageCard meta={part.meta} />
+  if (part.meta?.kind === 'poster') return <PosterCard meta={part.meta} />
   if (part.meta?.kind === 'figure') return <FigureCard meta={part.meta} />
   // A diff card starts collapsed and reads as a row with a ±badge; it opens
   // into the colored patch.

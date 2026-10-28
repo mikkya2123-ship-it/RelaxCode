@@ -395,6 +395,12 @@
     var(--think-6) 100%
   );
   background-repeat: no-repeat;
+  /* The sweep layers below roam far outside this box (up to 282% sideways).
+     Clipping them here, at the element itself, instead of relying on an
+     ancestor's overflow: composited transforms have been seen painting past
+     a parent's rounded clip, which leaks the gradient out of the icon. */
+  overflow: hidden;
+  border-radius: inherit;
   /* A glass tube: a thin light along the top edge, shade along the bottom. */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),

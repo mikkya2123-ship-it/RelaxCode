@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { shell } from 'electron'
 import type { BackgroundProcessInfo, ChatMode, TodoItem, TodoStatus } from '@shared/ipc'
-import type { ImageMeta, FigureMeta } from '@shared/tool-meta'
+import type { ImageMeta, FigureMeta, PosterMeta, PosterFact } from '@shared/tool-meta'
 import { normalizeFigureSpec, renderFigureSvg } from '@shared/figures'
 import { safeHttpUrl } from '@shared/web-search'
 import {
@@ -1269,6 +1269,131 @@ const showImageTool: ToolDef = {
   }
 }
 
+/** A poster carries a handful of labelled rows, not the whole Wikipedia article. */
+const MAX_POSTER_FACTS = 12
+
+const showPosterTool: ToolDef = {
+  name: 'show_poster',
+  description:
+    'Show a subject of the arts as a poster card: a real picture on top and its passport underneath (title, author, a few labelled facts and a closing line) — like a theatre afisha. Use it by default whenever the subject of your answer is one specific work (a film, series, ballet, opera, play, painting, album, book, game), a person of the arts (actor, director, composer, artist) or a fictional character (Spider-Man, Peter Parker, Sherlock Holmes) — including plain "расскажи о…" / "кто такой…" questions, not only when the user asks for an afisha or a poster. Take the passport facts from your own knowledge; go to the web only to find the picture: web_search the subject and pass its direct link (the "Page image" line of a source works well), one search is usually enough — extra searches only when you do not know the facts or the user asked you to search. The tool downloads and embeds the picture. Keep your own reply to a couple of sentences around the card — never repeat the facts in text or paste the image as markdown. Do not use it when the subject is not one specific work or person (comparisons, genre history, code or workspace questions).',
+  parameters: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Heading of the card, e.g. "Афиша балета «Лебединое озеро»" or the work title' },
+      image_url: { type: 'string', description: 'Direct http(s) link to a picture of the work (poster, still, artwork)' },
+      path: { type: 'string', description: 'Picture file inside the workspace (instead of image_url)' },
+      alt: { type: 'string', description: 'Short description of the picture, also used as accessible text' },
+      author: { type: 'string', description: 'Line under the heading: author, composer, director or artist' },
+      author_url: { type: 'string', description: 'Link to a page about that author, if found' },
+      facts: {
+        type: 'array',
+        description: 'Labelled rows of the passport, e.g. {"label":"Композитор","value":"Пётр Чайковский"}. 3–8 rows.',
+        items: {
+          type: 'object',
+          properties: { label: { type: 'string' }, value: { type: 'string' } },
+          required: ['label', 'value']
+        }
+      },
+      note: { type: 'string', description: 'Short closing line under the facts — a teaser or a takeaway' },
+      source: { type: 'string', description: 'Page the picture came from, shown as a badge on the image' },
+      source_title: { type: 'string', description: 'Title of that page' }
+    },
+    required: ['title', 'facts']
+  },
+  risk: 'read',
+  execute: async (args, ctx) => {
+    const settings = cfg().visuals
+    if (!settings.imagesEnabled) {
+      throw new ToolError('show_poster is switched off in Settings → Images and drawings')
+    }
+    if (!settings.posterEnabled) {
+      throw new ToolError('show_poster is switched off in Settings → Images and drawings')
+    }
+    const title = argString(args, 'title', false)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200)
+    if (title.length === 0) throw new ToolError('Pass a title for the work')
+    const url = argString(args, 'image_url', false).trim()
+    const path = argString(args, 'path', false).trim()
+    if (url.length === 0 && path.length === 0) {
+      throw new ToolError(
+        'Pass image_url — a direct picture link (run web_search first and use a "Page image" line or any direct image link)'
+      )
+    }
+    if (url.length > 0 && path.length > 0) throw new ToolError('Pass only one of image_url or path')
+
+    const factText = (value: unknown, max: number): string =>
+      typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : ''
+    const rawFacts: unknown[] = Array.isArray(args.facts)
+      ? args.facts
+      : args.facts && typeof args.facts === 'object'
+        ? Object.entries(args.facts as Record<string, unknown>).map(([label, value]) => ({ label, value }))
+        : []
+    const facts: PosterFact[] = rawFacts
+      .map((entry): PosterFact | null => {
+        if (!entry || typeof entry !== 'object') return null
+        const item = entry as Record<string, unknown>
+        const label = factText(item.label ?? item.name ?? item.title, 60)
+        const value = factText(item.value ?? item.text ?? item.content, 240)
+        return label.length > 0 && value.length > 0 ? { label, value } : null
+      })
+      .filter((fact): fact is PosterFact => fact !== null)
+      .slice(0, MAX_POSTER_FACTS)
+    if (facts.length === 0) {
+      throw new ToolError('Pass at least one fact row, e.g. facts: [{"label":"Год","value":"1877"}]')
+    }
+
+    const maxBytes = Math.min(settings.maxImageMb, MAX_IMAGE_MB) * 1024 * 1024
+    const loaded = path
+      ? await readImageFile(resolveInWorkspace(path), maxBytes)
+      : await (async () => {
+          if (!settings.remoteImages) {
+            throw new ToolError(
+              'Pictures from the internet are switched off in Settings → Images and drawings. Tell the user which setting to turn on.'
+            )
+          }
+          const safe = safeHttpUrl(url)
+          if (!safe) throw new ToolError('Only http(s) links to pictures are supported')
+          return fetchRemoteImage(safe, ctx.signal, maxBytes)
+        })()
+
+    const size = imageSize(loaded.buffer, loaded.mime)
+    const author = factText(args.author, 160) || undefined
+    const authorUrl =
+      author && settings.imageSource ? (safeHttpUrl(argString(args, 'author_url', false)) ?? undefined) : undefined
+    const sourceUrl = settings.imageSource
+      ? (safeHttpUrl(argString(args, 'source', false)) ?? loaded.url)
+      : undefined
+    const sourceTitle = factText(args.source_title, 160) || undefined
+    const imageAlt =
+      factText(args.alt, 200) || `Picture: ${title}`
+
+    const meta: PosterMeta = {
+      kind: 'poster',
+      title,
+      imageSrc: toDataUrl(loaded.mime, loaded.buffer),
+      imageAlt,
+      facts,
+      ...(author ? { author } : {}),
+      ...(authorUrl ? { authorUrl } : {}),
+      ...(factText(args.note, 300) ? { note: factText(args.note, 300) } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
+      ...(sourceTitle ? { sourceTitle } : {}),
+      mime: loaded.mime,
+      bytes: loaded.buffer.length,
+      ...(size && size.width > 0 && size.height > 0 ? { width: size.width, height: size.height } : {})
+    }
+    return {
+      ok: true,
+      summary: `showed a poster — ${title}`,
+      detail:
+        'The poster card is now visible to the user: the picture on top, the passport of the work underneath. Refer to it in a couple of sentences; do not repeat the facts, the picture link or base64 in your reply. If the picture does not match the work, call show_poster again with a better link.',
+      meta
+    }
+  }
+}
+
 /** Says what the model's call actually contained, so its retry can fix the shape. */
 function describeFigureArgs(value: unknown): string {
   if (Array.isArray(value)) return `an array of ${value.length} items, used directly as the elements`
@@ -1452,6 +1577,7 @@ export const TOOLS: ToolDef[] = [
   fetchUrlTool,
   webSearchTool,
   showImageTool,
+  showPosterTool,
   drawFigureTool,
   ...GIT_TOOLS,
   ...CHECK_TOOLS,
@@ -1474,7 +1600,11 @@ export function toolsForMode(mode: ChatMode): ToolDef[] {
     disabled.add('list_servers')
   }
   if (!settings.webSearch.enabled) disabled.add('web_search')
-  if (!settings.visuals.imagesEnabled) disabled.add('show_image')
+  if (!settings.visuals.imagesEnabled) {
+    disabled.add('show_image')
+    disabled.add('show_poster')
+  }
+  if (!settings.visuals.posterEnabled) disabled.add('show_poster')
   if (!settings.visuals.figuresEnabled) disabled.add('draw_figure')
   const base = mode === 'agent' ? TOOLS : TOOLS.filter((tool) => tool.risk === 'read')
   // Tools of connected MCP servers join the registry dynamically: only trusted,

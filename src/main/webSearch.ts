@@ -35,8 +35,16 @@ const MAX_PAGE_BYTES = 384 * 1024
 const MAX_PAGE_CHARS = 4_500
 const MAX_SNIPPET_CHARS = 360
 const MAX_EXCERPT_CHARS = 280
-const MAX_READ_CONCURRENCY = 3
+const MAX_READ_CONCURRENCY = 10
 const MAX_REDIRECTS = 4
+const RELEVANCE_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'how', 'in', 'is', 'it',
+  'of', 'on', 'or', 'the', 'to', 'was', 'what', 'when', 'where', 'who', 'why', 'with',
+  'image', 'images', 'photo', 'photos', 'picture', 'pictures',
+  'и', 'в', 'во', 'на', 'о', 'об', 'про', 'что', 'как', 'где', 'когда', 'кто', 'это', 'для',
+  'из', 'или', 'по', 'с', 'со', 'за'
+])
+let webSearchFetch: ((input: string, init?: RequestInit) => Promise<Response>) | null = null
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 RelaxCode/0.1'
 
@@ -60,6 +68,13 @@ export interface WebSearchRun {
   summary: string
   detail: string
   meta: WebSearchMeta
+}
+
+/** Use Electron's network stack in the app so searches and page reads share its proxy settings. */
+export function setWebSearchFetch(
+  fetcher: ((input: string, init?: RequestInit) => Promise<Response>) | null
+): void {
+  webSearchFetch = fetcher
 }
 
 interface ProviderResult extends ParsedSearchResult {
@@ -109,7 +124,7 @@ export async function runWebSearch(
 ): Promise<WebSearchRun> {
   const query = cleanQuery(options.query)
   const maxResults = clampInt(options.maxResults, 1, 10, 6)
-  const readPages = clampInt(options.readPages, 0, 5, 3)
+  const readPages = clampInt(options.readPages, 0, 10, 10)
   const meta: WebSearchMeta = {
     kind: 'web-search',
     query,
@@ -276,7 +291,9 @@ async function searchProviders(
             ...keyed.filter((provider) => provider !== autoPreferred)
           ]
         : []
-      : [options.provider]
+      : options.provider === 'bing'
+        ? ['bing', 'duckduckgo']
+        : [options.provider]
   if (options.provider === 'auto') order.push(...keyless)
 
   if (order.length === 0) {
@@ -291,13 +308,14 @@ async function searchProviders(
   for (const provider of order) {
     if (!isKeyless(provider) && !options.apiKey) continue
     try {
-      const results = await searchWith(provider, query, {
+      const providerResults = await searchWith(provider, query, {
         apiKey: options.apiKey,
         maxResults: options.maxResults,
         recency: options.recency,
         safeSearch: options.safeSearch,
         signal: options.signal
       })
+      const results = relevantResults(query, providerResults)
       if (results.length === 0) {
         answeredWithEmpty = PROVIDER_LABELS[provider]
         if (!isKeyless(provider) && options.provider === 'auto') autoPreferred = provider
@@ -600,7 +618,7 @@ async function searchBing(
       }
       answered = true
       const xml = await response.text()
-      const results = parseBingRss(xml, options.maxResults)
+      const results = parseBingRss(xml, options.maxResults, query)
       if (results.length > 0) return results
     } catch (error) {
       lastError = errorText(error)
@@ -767,6 +785,23 @@ function providerPageText(raw: string): string {
  * HTTP helpers
  * ------------------------------------------------------------------------- */
 
+function relevantResults(query: string, results: ProviderResult[]): ProviderResult[] {
+  const tokenize = (value: string): string[] =>
+    value
+      .normalize('NFKD')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]{2,}/gu) ?? []
+  const tokens = [...new Set(tokenize(query).filter((token) => !RELEVANCE_STOP_WORDS.has(token)))]
+  // Short queries are too ambiguous to score reliably; let the provider rank them.
+  if (tokens.length < 2) return results
+
+  const minimumMatches = Math.max(2, Math.ceil(tokens.length * 0.5))
+  return results.filter((result) => {
+    const resultTokens = new Set(tokenize(`${result.title} ${result.snippet} ${result.url}`))
+    return tokens.filter((token) => resultTokens.has(token)).length >= minimumMatches
+  })
+}
+
 async function request(
   url: string,
   init: RequestInit,
@@ -776,7 +811,7 @@ async function request(
   const timeout = AbortSignal.timeout(timeoutMs)
   const combined = AbortSignal.any([signal, timeout])
   try {
-    return await fetch(url, { ...init, signal: combined })
+    return await (webSearchFetch ?? globalThis.fetch)(url, { ...init, signal: combined })
   } catch (error) {
     if (timeout.aborted) throw new Error('request timed out')
     if (signal.aborted) throw new Error('aborted')

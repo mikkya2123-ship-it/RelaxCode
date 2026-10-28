@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -82,6 +82,7 @@ import type { TerminalSessionInfo } from '@shared/ipc'
 import { resolveUiReply, setUiWindow } from './ui-bridge'
 import { restoreProjectSnapshot } from './tools-project'
 import { createTerminal, closeTerminal, listTerminals, stopTerminal, terminalInput } from './term-sessions'
+import { setWebSearchFetch } from './webSearch'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -105,6 +106,8 @@ function logFailure(kind: string, error: unknown): void {
     error instanceof Error ? (error.stack ?? `${error.name}: ${error.message}`) : String(error)
   logEvent('error', `${kind}: ${detail}`)
 }
+
+setWebSearchFetch((input, init) => net.fetch(input, init))
 
 process.on('uncaughtException', (error) => logFailure('uncaughtException', error))
 process.on('unhandledRejection', (reason) => logFailure('unhandledRejection', reason))

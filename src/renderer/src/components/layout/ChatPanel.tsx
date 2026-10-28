@@ -8,7 +8,6 @@ import {
 import {
   ArrowDown,
   ArrowUp,
-  Check,
   ChevronDown,
   CircleAlert,
   History,
@@ -529,10 +528,12 @@ export function ChatPanel(): JSX.Element {
                           )}
                           {ui?.showTokenUsage && (
                             <span>
-                              {t('chat.tokens', {
-                                input: message.promptTokens ?? 0,
-                                output: message.completionTokens ?? 0
-                              })}
+                              {message.promptTokens || message.completionTokens
+                                ? t('chat.tokens', {
+                                    input: message.promptTokens ?? 0,
+                                    output: message.completionTokens ?? 0
+                                  })
+                                : t('chat.tokens.unknown')}
                             </span>
                           )}
                           {ui?.showTokenUsage &&
@@ -765,7 +766,7 @@ export function ChatPanel(): JSX.Element {
                     collisionPadding={12}
                     // The chip shrinks with the panel, so the sheet follows it
                     // instead of a fixed width — together they read as one.
-                    className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[128px] rounded-t-xl rounded-b-none border-b-0 p-0 shadow-none"
+                    className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-t-xl rounded-b-none border-b-0 p-0 shadow-none"
                   >
                     {/* The list is capped — a long model list scrolls instead of
                         covering the window, and the actions stay reachable. */}
@@ -798,15 +799,12 @@ export function ChatPanel(): JSX.Element {
                           key={entry.id}
                           data-current={entry.id === model ? 'true' : undefined}
                           onSelect={() => handlePickModel(entry.id)}
-                          className="gap-1.5 px-2 py-1.5 text-[12px]"
+                          className={cn(
+                            'gap-1.5 px-2 py-1.5 text-[12px]',
+                            entry.id === model && 'bg-accent text-foreground'
+                          )}
                           title={entry.tools ? t('chat.model.tools', { id: entry.id }) : entry.id}
                         >
-                          <Check
-                            className={cn(
-                              'size-3 shrink-0',
-                              entry.id === model ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
                           <ModelIcon id={entry.id} />
                           <MarqueeText className="min-w-0 flex-1">{entry.id}</MarqueeText>
                           {entry.free && (

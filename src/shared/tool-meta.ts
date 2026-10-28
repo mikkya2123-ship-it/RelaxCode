@@ -37,6 +37,37 @@ export interface FigureMeta {
   style?: { grid: boolean; theme: FigureTheme; results: boolean }
 }
 
+/** One labelled row of a poster's passport ("Год — 1877"). */
+export interface PosterFact {
+  label: string
+  value: string
+}
+
+/**
+ * An artwork poster: a real picture of the work on top and its passport
+ * (title, author, labelled facts) underneath, like a theatre afisha.
+ */
+export interface PosterMeta {
+  kind: 'poster'
+  title: string
+  /** `data:image/...;base64,...` — fetched and embedded, the card never hits the network. */
+  imageSrc: string
+  imageAlt: string
+  /** Line under the title: author, composer, director or artist. */
+  author?: string
+  authorUrl?: string
+  facts: PosterFact[]
+  /** Short closing line under the facts (a teaser or a takeaway). */
+  note?: string
+  /** Page the picture was taken from, shown as a badge on the image. */
+  sourceUrl?: string
+  sourceTitle?: string
+  mime: string
+  bytes: number
+  width?: number
+  height?: number
+}
+
 /** A unified diff shown as a colored before/after card instead of raw text. */
 export interface DiffMeta {
   kind: 'diff'
@@ -75,6 +106,7 @@ export interface TimelapseMeta {
 export type ToolMeta =
   | WebSearchMeta
   | ImageMeta
+  | PosterMeta
   | FigureMeta
   | DiffMeta
   | TableMeta

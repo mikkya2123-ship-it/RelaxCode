@@ -620,6 +620,54 @@ export function applyProbePayload(store, payload, { doRedact = true, terminalFee
       )
       return { ok: true }
     }
+    case 'exception': {
+      const message = clean(payload.message, doRedact, 1_000)
+      const stack = clean(payload.stack, doRedact, 3_000)
+      store.addEvent({
+        id: `exception:${hash(`${message}${stack}`, 10)}:${Math.floor(at / 60_000)}`,
+        at,
+        kind: 'renderer-error',
+        level: 'error',
+        title: `Исключение: ${truncate(message, 160)}`,
+        detail: stack || message
+      })
+      store.addIncident(
+        makeIncident({
+          kind: 'renderer-error',
+          severity: 'critical',
+          title: `Исключение в окне: ${truncate(message, 140)}`,
+          detail: stack || message,
+          at,
+          fingerprintExtra: `${message}:${Math.floor(at / 300_000)}`
+        })
+      )
+      return { ok: true }
+    }
+    case 'log': {
+      const message = clean(payload.text, doRedact, 2_000)
+      const level = payload.level === 'error' ? 'error' : 'warning'
+      store.addEvent({
+        id: `window-log:${hash(message, 10)}:${Math.floor(at / 60_000)}`,
+        at,
+        kind: level === 'error' ? 'log-error' : 'log-warn',
+        level,
+        title: `Окно: ${truncate(message, 160)}`,
+        detail: `${payload.url ?? ''}${payload.line ? `:${payload.line}` : ''}\n${message}`
+      })
+      if (level === 'error') {
+        store.addIncident(
+          makeIncident({
+            kind: 'log-error',
+            severity: 'warning',
+            title: `Ошибка в окне: ${truncate(message, 140)}`,
+            detail: message,
+            at,
+            fingerprintExtra: `${message}:${Math.floor(at / 300_000)}`
+          })
+        )
+      }
+      return { ok: true }
+    }
     case 'console': {
       const message = clean(payload.text, doRedact, 2_000)
       const level = payload.level === 'error' ? 'error' : 'warning'

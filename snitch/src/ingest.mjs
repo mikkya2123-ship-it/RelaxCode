@@ -12,7 +12,7 @@ import {
   detectWorkspace
 } from './paths.mjs'
 import { redact, stripPayloads } from './redact.mjs'
-import { classifyNotice, makeIncident } from './analyze.mjs'
+import { classifyNotice, makeIncident, recordRunIncidents } from './analyze.mjs'
 import { countRun } from './store.mjs'
 import { ensureDir, firstLine, hash, safeJson, truncate } from './util.mjs'
 
@@ -503,9 +503,11 @@ export async function ingestExchangeFiles(store, { userData, doRedact = true, re
       parsed.id = `${parsed.requestId}-${parsed.startedAt}`
     }
     parsed.archiveFile = await archiveExchange(report, file.path, parsed.id, parsed.startedAt, retention)
+    store.meta.archiveIndex[parsed.id] = parsed.archiveFile
     const result = store.upsertRun(parsed)
     summary[result.created ? 'newRuns' : 'updatedRuns'] += 1
     publishExchangeEvents(store, result.run)
+    recordRunIncidents(store, result.run)
     store.meta.ingested[key] = {
       size: file.size,
       mtimeMs: file.mtimeMs,
@@ -529,9 +531,11 @@ export async function ingestExchangeFiles(store, { userData, doRedact = true, re
       const parsed = report ? parseExchange(report, { file: path, doRedact, now: stat.mtimeMs }) : null
       if (!parsed) continue
       parsed.archiveFile = relative(SNITCH_ROOT, path)
+      store.meta.archiveIndex[parsed.id] = parsed.archiveFile
       const result = store.upsertRun(parsed)
       summary[result.created ? 'newRuns' : 'updatedRuns'] += 1
       publishExchangeEvents(store, result.run)
+      recordRunIncidents(store, result.run)
       store.meta.ingested[key] = { size: stat.size, mtimeMs: stat.mtimeMs, runId: result.run.id, at: now }
     }
   } catch {
@@ -737,6 +741,9 @@ export async function collectSources(store, options = {}) {
   const frames = await ingestFrames(store, { userData, now: started })
   const mcpServers = await ingestMcpConfig(store, { userData })
   await ingestModelMemory(store, { userData })
+  if (options.logFile) {
+    store.setMeta({ sources: { logFile: options.logFile } })
+  }
   const summary = {
     at: started,
     durationMs: Date.now() - started,

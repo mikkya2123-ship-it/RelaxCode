@@ -554,7 +554,10 @@ function persist(state: ChatState): void {
           messages: chat.messages.map((message) => ({
             ...message,
             parts: message.parts.map((part) =>
-              part.kind === 'tool' && part.meta?.kind === 'image' ? { ...part, meta: undefined } : part
+              part.kind === 'tool' &&
+              (part.meta?.kind === 'image' || part.meta?.kind === 'poster')
+                ? { ...part, meta: undefined }
+                : part
             )
           }))
         }))

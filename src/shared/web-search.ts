@@ -301,8 +301,20 @@ function publishedIso(value: string): string | undefined {
  * Bing's RSS endpoint is one no-key fallback. It returns ordinary web results
  * (title, link, HTML description), unlike the Instant Answer API.
  */
-export function parseBingRss(xml: string, limit = 10): ParsedSearchResult[] {
+export function parseBingRss(xml: string, limit = 10, requestedQuery = ''): ParsedSearchResult[] {
   const results: ParsedSearchResult[] = []
+  // Bing may serve a cached feed unrelated to the requested query.
+  const query = requestedQuery.trim()
+  const tokenize = (value: string): string[] =>
+    value.normalize('NFKD').toLowerCase().match(/[a-z0-9À-ɏЀ-ӿ]+/gi) ?? []
+  const stopWords = new Set([
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'how', 'in', 'is', 'it',
+    'of', 'on', 'or', 'the', 'to', 'was', 'what', 'when', 'where', 'who', 'why', 'with',
+    'и', 'в', 'во', 'на', 'о', 'об', 'про', 'что', 'как', 'где', 'когда', 'кто', 'это', 'для',
+    'из', 'или', 'по', 'с', 'со', 'за'
+  ])
+  const queryTokens = [...new Set(tokenize(query).filter((token) => !stopWords.has(token)))]
+  const minimumMatches = Math.max(2, Math.ceil(queryTokens.length * 0.5))
   const seen = new Set<string>()
   for (const match of xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
     const item = match[1]
@@ -313,6 +325,14 @@ export function parseBingRss(xml: string, limit = 10): ParsedSearchResult[] {
     seen.add(key)
     const title = stripHtml(xmlValue(item, 'title')) || domainOf(url) || url
     const snippet = stripHtml(xmlValue(item, 'description')).slice(0, 600)
+    const itemTokens = new Set(tokenize(`${title} ${snippet} ${url}`))
+    if (
+      requestedQuery.trim() &&
+      queryTokens.length >= 2 &&
+      queryTokens.filter((token) => itemTokens.has(token)).length < minimumMatches
+    ) {
+      continue
+    }
     const published = publishedIso(xmlValue(item, 'pubDate'))
     results.push({ title, url, snippet, ...(published ? { published } : {}) })
     if (results.length >= limit) break

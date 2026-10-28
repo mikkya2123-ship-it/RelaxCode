@@ -73,6 +73,12 @@ check('rss snippet is plain text', parsed[0]?.snippet === 'Fresh search news', p
 check('rss published date is normalized', parsed[0]?.published === '2026-10-20T10:00:00.000Z')
 check('rss skips unsafe schemes', parsed.every((item) => item.url.startsWith('https://')))
 check('rss respects the limit', parseBingRss(rss, 1).length === 1)
+const unrelatedRss = `<rss><channel><title>Bing: TON 618 quasar</title>
+  <item><title>Google Translate help</title><link>https://support.google.com/translate/help</link><description>Translate text and voice</description></item>
+  <item><title>TON 618 black hole</title><link>https://example.com/ton-618</link><description>A quasar with an ultramassive black hole</description></item>
+</channel></rss>`
+const relevantRss = parseBingRss(unrelatedRss, 10, 'TON 618 quasar')
+check('rss drops results unrelated to the feed query', relevantRss.length === 1 && relevantRss[0]?.url === 'https://example.com/ton-618', relevantRss)
 
 const ddgHtml = `<div id="links" class="results">
   <div class="result results_links results_links_deep web-result ">
@@ -218,39 +224,39 @@ const lookup = dns.lookup
 const realFetch = globalThis.fetch
 const bingRss = `<?xml version="1.0"?><rss><channel>
   <item>
-    <title>Readable example</title>
+    <title>Readable example test</title>
     <link>https://example.com/one</link>
-    <description>First result</description>
+    <description>First result for example test</description>
   </item>
   <item>
-    <title>Broken example</title>
+    <title>Broken example test</title>
     <link>https://example.com/two</link>
-    <description>Second result</description>
+    <description>Second result for example test</description>
   </item>
 </channel></rss>`
 const emptyRss = '<?xml version="1.0"?><rss><channel></channel></rss>'
 const ddgResultsHtml = `<div id="links" class="results">
   <div class="result results_links results_links_deep web-result ">
     <h2 class="result__title">
-      <a class="result__a" href="https://example.com/one">Readable example</a>
+      <a class="result__a" href="https://example.com/one">Readable example test</a>
     </h2>
-    <a class="result__snippet">First result</a>
+    <a class="result__snippet">First result for example fallback test</a>
   </div>
   <div class="result results_links results_links_deep web-result ">
     <h2 class="result__title">
-      <a class="result__a" href="https://example.com/two">Broken example</a>
+      <a class="result__a" href="https://example.com/two">Broken example test</a>
     </h2>
-    <a class="result__snippet">Second result</a>
+    <a class="result__snippet">Second result for example fallback test</a>
   </div>
 </div>`
 const bingResultsHtml = `<ol id="b_results">
   <li class="b_algo">
-    <h2><a href="https://example.com/one">Readable example</a></h2>
-    <p>First result</p>
+    <h2><a href="https://example.com/one">Readable example test</a></h2>
+    <p>First result for example test</p>
   </li>
   <li class="b_algo">
-    <h2><a href="https://example.com/two">Broken example</a></h2>
-    <p>Second result</p>
+    <h2><a href="https://example.com/two">Broken example test</a></h2>
+    <p>Second result for example test</p>
   </li>
 </ol>`
 const pageHtml = `<!doctype html><html><head><title>One</title></head><body>
@@ -274,15 +280,19 @@ dns.lookup = async () => [{ address: '93.184.216.34', family: 4 }]
 globalThis.fetch = async (input) => {
   const url = typeof input === 'string' ? input : input.url
   if (url.startsWith('https://html.duckduckgo.com/html/')) {
-    const body = url.includes('empty') ? '<html><body>No results</body></html>' : ddgResultsHtml
+    const body = url.includes('bingempty')
+      ? `<div class="result results_links"><a class="result__a" href="https://example.com/fallback">Fallback test result</a><a class="result__snippet">A relevant fallback test result</a></div>`
+      : url.includes('empty')
+        ? '<html><body>No results</body></html>'
+        : ddgResultsHtml
     return new Response(body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
   }
   if (url.startsWith('https://www.bing.com/search')) {
     if (url.includes('format=rss')) {
-      const body = url.includes('empty') || url.includes('onlyhtml') ? emptyRss : bingRss
+      const body = url.includes('bingempty') ? emptyRss : bingRss
       return new Response(body, { status: 200, headers: { 'content-type': 'application/rss+xml' } })
     }
-    const body = url.includes('empty') ? '<html></html>' : bingResultsHtml
+    const body = url.includes('bingempty') ? '<html></html>' : bingResultsHtml
     return new Response(body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } })
   }
   if (url === 'https://example.com/one') {
@@ -329,7 +339,7 @@ try {
   // Auto with a key tries the keyed providers first, then falls back to DuckDuckGo.
   const fallback = await runWebSearch(
     {
-      query: 'fallback test',
+      query: 'example fallback test',
       maxResults: 2,
       readPages: 0,
       provider: 'auto',
@@ -347,6 +357,25 @@ try {
   check(
     'pipeline does not fetch pages when readPages is zero',
     fallback.meta.sources.every((source) => source.status === 'found')
+  )
+
+  // Explicit Bing selection also falls back to DuckDuckGo if Bing has no matching results.
+  const explicitBingFallback = await runWebSearch(
+    {
+      query: 'bingempty fallback test',
+      maxResults: 2,
+      readPages: 0,
+      provider: 'bing',
+      apiKey: null,
+      safeSearch: true,
+      reserveCitations: (count) => Array.from({ length: count }, (_, index) => index + 1)
+    },
+    new AbortController().signal
+  )
+  check(
+    'explicit bing falls back when Bing has no relevant results',
+    explicitBingFallback.ok && explicitBingFallback.meta.provider === 'DuckDuckGo',
+    explicitBingFallback.meta
   )
 
   // An empty result set is a completed search, not a failed tool call.
@@ -375,7 +404,7 @@ try {
   // organic results; the provider must fall back instead of reporting 404/empty.
   const htmlFallback = await runWebSearch(
     {
-      query: 'onlyhtml test',
+      query: 'example onlyhtml test',
       maxResults: 3,
       readPages: 0,
       provider: 'bing',

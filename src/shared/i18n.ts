@@ -217,6 +217,7 @@ export const ru = {
   'action.close': 'Закрыть',
 
   'chat.tokens': 'Токены: {input} → {output}',
+  'chat.tokens.unknown': 'Токены: провайдер не сообщил',
   'chat.context.title': 'Контекст',
   'chat.context.used': '{used} из {limit} токенов занято',
   'chat.context.usedOnly': '{used} токенов занято',
@@ -566,6 +567,9 @@ export const ru = {
     'Большие изображения не скачиваются. Слишком тяжёлые картинки также не сохраняются в истории чатов.',
   'settings.visuals.imageSource': 'Показывать источник',
   'settings.visuals.imageSource.hint': 'Ссылка на страницу, откуда взята картинка, под изображением.',
+  'settings.visuals.posterEnabled': 'Афиши произведений',
+  'settings.visuals.posterEnabled.hint':
+    'Модель сможет отвечать карточкой-афишей о фильме, балете, картине, книге или персонаже: картинка из интернета и паспорт произведения (автор, год, факты).',
   'settings.visuals.figuresEnabled': 'Чертежи и графики',
   'settings.visuals.figuresEnabled.hint':
     'Модель сможет чертить углы, отрезки, треугольники, векторы и графики функций — с буквами, размерами и вычисленными значениями, а не ASCII-артом.',
@@ -1156,6 +1160,7 @@ export const en: Record<TKey, string> = {
   'action.close': 'Close',
 
   'chat.tokens': 'Tokens: {input} → {output}',
+  'chat.tokens.unknown': 'Tokens: not reported by the provider',
   'chat.context.title': 'Context',
   'chat.context.used': '{used} of {limit} tokens used',
   'chat.context.usedOnly': '{used} tokens used',
@@ -1505,6 +1510,9 @@ export const en: Record<TKey, string> = {
     'Bigger images are not downloaded. Very large pictures are also left out of saved chat history.',
   'settings.visuals.imageSource': 'Show the source',
   'settings.visuals.imageSource.hint': 'A link to the page a picture came from, under the picture.',
+  'settings.visuals.posterEnabled': 'Artwork posters',
+  'settings.visuals.posterEnabled.hint':
+    'Lets the model answer with an afisha card about a film, ballet, painting, book or character: a picture from the web plus the passport of the work (author, year, facts).',
   'settings.visuals.figuresEnabled': 'Drawings and graphs',
   'settings.visuals.figuresEnabled.hint':
     'Lets the model draw angles, segments, triangles, vectors and function graphs — with labels, sizes and computed values, instead of ASCII art.',

@@ -153,6 +153,8 @@ export interface VisualsSettings {
   maxImageMb: number
   /** Show the page a picture came from under it. */
   imageSource: boolean
+  /** `show_poster` (artwork afisha cards) is offered to the model at all. */
+  posterEnabled: boolean
   /** `draw_figure` is offered to the model at all. */
   figuresEnabled: boolean
   figureMode: VisualMode
@@ -351,8 +353,8 @@ export const DEFAULT_SETTINGS: SettingsValues = {
   webSearch: {
     enabled: true,
     provider: 'auto',
-    maxResults: 6,
-    readPages: 3,
+    maxResults: 10,
+    readPages: 10,
     maxUses: 6,
     safeSearch: true
   },
@@ -362,6 +364,7 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     remoteImages: true,
     maxImageMb: 4,
     imageSource: true,
+    posterEnabled: true,
     figuresEnabled: true,
     figureMode: 'auto',
     figureGrid: true,

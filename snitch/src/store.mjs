@@ -318,6 +318,9 @@ export class Store {
     for (const id of Object.keys(this.state.runs)) {
       if (!keep.has(id)) delete this.state.runs[id]
     }
+    for (const id of Object.keys(this.state.meta.archiveIndex ?? {})) {
+      if (!this.state.runs[id]) delete this.state.meta.archiveIndex[id]
+    }
   }
 
   pruneIncidents() {
@@ -373,7 +376,7 @@ export class Store {
       liveRuns: runs.filter((run) => run.live).length,
       events: this.state.events.length,
       incidents: this.state.incidents.length,
-      archived: Object.keys(this.state.meta.archiveIndex ?? {}).length
+      archived: runs.filter((run) => run.archiveFile).length
     }
   }
 }

@@ -86,34 +86,34 @@ export function EditorArea(): JSX.Element {
   const terminalOpen = useUiStore((s) => s.terminalOpen)
   const t = useT()
 
-  if (filesCount > 0) {
-    return (
-      <div className="flex h-full min-w-0 flex-1 flex-col bg-card">
-        <EditorTabs />
-        <div className="min-h-0 flex-1">
-          <EditorPane />
+  // The terminal dock lives at the bottom of the whole editor zone, in every
+  // state — with files open, with an empty workspace and on the welcome screen.
+  return (
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-card">
+      {filesCount > 0 ? (
+        <>
+          <EditorTabs />
+          <div className="min-h-0 flex-1">
+            <EditorPane />
+          </div>
+        </>
+      ) : workspace ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center animate-fade-in">
+          <div className="flex size-10 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+            <FolderOpen className="size-[18px]" />
+          </div>
+          <p className="mt-3 text-[13px] font-medium text-foreground">{t('workspace.opened')}</p>
+          <p className="mt-1 max-w-sm truncate px-6 text-xs text-muted-foreground">{workspace.path}</p>
+          <p className="mt-4 text-xs text-tertiary">{t('workspace.selectFile')}</p>
+          <Button variant="default" className="mt-5" onClick={() => void openWorkspace()}>
+            <FolderOpen className="size-4" />
+            {t('welcome.openFolder')}
+          </Button>
         </div>
-        {terminalOpen && <TerminalPanel />}
-      </div>
-    )
-  }
-
-  if (workspace) {
-    return (
-      <div className="flex h-full min-w-0 flex-1 flex-col items-center justify-center bg-card animate-fade-in">
-        <div className="flex size-10 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-          <FolderOpen className="size-[18px]" />
-        </div>
-        <p className="mt-3 text-[13px] font-medium text-foreground">{t('workspace.opened')}</p>
-        <p className="mt-1 max-w-sm truncate px-6 text-xs text-muted-foreground">{workspace.path}</p>
-        <p className="mt-4 text-xs text-tertiary">{t('workspace.selectFile')}</p>
-        <Button variant="default" className="mt-5" onClick={() => void openWorkspace()}>
-          <FolderOpen className="size-4" />
-          {t('welcome.openFolder')}
-        </Button>
-      </div>
-    )
-  }
-
-  return <WelcomeScreen />
+      ) : (
+        <WelcomeScreen />
+      )}
+      {terminalOpen && <TerminalPanel />}
+    </div>
+  )
 }

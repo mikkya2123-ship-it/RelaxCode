@@ -517,7 +517,7 @@ function sanitizeWebSearch(value: unknown): Partial<SettingsValues['webSearch']>
     out.maxResults = Math.round(asNumber(raw.maxResults, 1, 10, d.maxResults))
   }
   if (raw.readPages !== undefined) {
-    out.readPages = Math.round(asNumber(raw.readPages, 0, 5, d.readPages))
+    out.readPages = Math.round(asNumber(raw.readPages, 0, 10, d.readPages))
   }
   if (raw.maxUses !== undefined) {
     out.maxUses = Math.round(asNumber(raw.maxUses, 1, 20, d.maxUses))
@@ -537,6 +537,9 @@ function sanitizeVisuals(value: unknown): Partial<SettingsValues['visuals']> {
     out.maxImageMb = asNumber(raw.maxImageMb, 1, 12, d.maxImageMb)
   }
   if (raw.imageSource !== undefined) out.imageSource = asBoolean(raw.imageSource, d.imageSource)
+  if (raw.posterEnabled !== undefined) {
+    out.posterEnabled = asBoolean(raw.posterEnabled, d.posterEnabled)
+  }
   if (raw.figuresEnabled !== undefined) {
     out.figuresEnabled = asBoolean(raw.figuresEnabled, d.figuresEnabled)
   }

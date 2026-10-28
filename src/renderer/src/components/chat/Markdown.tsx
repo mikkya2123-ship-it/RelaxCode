@@ -5,9 +5,12 @@ import type { ChatPart } from '@/stores/chat'
 
 /**
  * Chat markdown: the model's answer gets real typography instead of raw
- * asterisks. Secondary information reads as framed callouts — quotes and code
- * land in tinted boxes, lists get proper markers, citations stay clickable.
- * Everything degrades silently while the answer is still streaming.
+ * asterisks. Each kind of emphasis gets its own treatment so the eye can
+ * scan an answer at a glance: H1 is underlined by a full-width rule, H2
+ * carries a left accent bar, H3 is recoloured small caps, bold is picked
+ * out with a soft marker fill, italic fades to muted, inline code sits in
+ * a thin frame, quotes and code blocks land in tinted boxes and citations
+ * stay clickable. Everything degrades silently while the answer streams.
  */
 
 function collectSources(parts: ChatPart[]): Map<number, WebSearchSource> {
@@ -34,15 +37,20 @@ function Inline({
     <>
       {nodes.map((node, index) => {
         if (node.type === 'bold') {
+          // Key phrases: a soft marker fill, like a highlighter pen.
           return (
-            <strong key={index} className="font-semibold text-foreground">
+            <strong
+              key={index}
+              className="rounded bg-foreground/[0.07] px-1 py-px font-semibold text-foreground"
+            >
               {node.text}
             </strong>
           )
         }
         if (node.type === 'italic') {
+          // Aside and secondary remarks fade to the muted ink.
           return (
-            <em key={index} className="italic">
+            <em key={index} className="italic text-muted-foreground">
               {node.text}
             </em>
           )
@@ -51,7 +59,7 @@ function Inline({
           return (
             <code
               key={index}
-              className="rounded bg-foreground/[0.08] px-1 py-px font-mono text-[11.5px] text-foreground"
+              className="rounded border border-border bg-foreground/[0.06] px-1 py-px font-mono text-[11.5px] text-foreground"
             >
               {node.text}
             </code>
@@ -131,15 +139,26 @@ function MarkdownBlock({
     )
   }
   if (block.type === 'h') {
-    const size =
-      block.level === 1
-        ? 'text-[15px]'
-        : block.level === 2
-          ? 'text-[14px]'
-          : 'text-[13px] text-muted-foreground'
+    const content = <Inline nodes={block.lines[0] ?? []} sources={sources} />
+    // Every level gets its own device: a rule under H1, an accent bar for
+    // H2, recoloured small caps for H3.
+    if (block.level === 1) {
+      return (
+        <p className="mt-2 border-b border-border pb-1 text-[16px] font-bold text-foreground">
+          {content}
+        </p>
+      )
+    }
+    if (block.level === 2) {
+      return (
+        <p className="mt-1.5 border-l-2 border-foreground/30 pl-2 text-[14.5px] font-semibold text-foreground">
+          {content}
+        </p>
+      )
+    }
     return (
-      <p className={`${size} mt-1 font-semibold text-foreground`}>
-        <Inline nodes={block.lines[0] ?? []} sources={sources} />
+      <p className="mt-1 text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+        {content}
       </p>
     )
   }

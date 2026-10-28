@@ -518,7 +518,7 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     key: 'readPages',
     label: 'settings.webSearch.readPages',
     hint: 'settings.webSearch.readPages.hint',
-    control: { kind: 'number', min: 0, max: 5, step: 1 },
+    control: { kind: 'number', min: 0, max: 10, step: 1 },
     keywords: 'страницы читать открывать источники'
   },
   {
@@ -595,6 +595,16 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.visuals.imageSource.hint',
     control: { kind: 'switch' },
     keywords: 'источник ссылка сайт source link attribution'
+  },
+  {
+    id: 'visuals.posterEnabled',
+    section: 'visuals',
+    group: 'visuals',
+    key: 'posterEnabled',
+    label: 'settings.visuals.posterEnabled',
+    hint: 'settings.visuals.posterEnabled.hint',
+    control: { kind: 'switch' },
+    keywords: 'афиша постер произведение балет фильм картина персонаж poster afisha artwork'
   },
   {
     id: 'visuals.figuresEnabled',

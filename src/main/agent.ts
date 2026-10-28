@@ -227,6 +227,21 @@ function finalAnswerNudge(language: ResponseLanguage): string {
   return `${ru}\n\n${en}`
 }
 
+/**
+ * Sent when the run used up its step limit while the model was still working
+ * (streaming progress notes is enough to count as "still working"). Tools are
+ * already off: this request can only produce the honest closing summary.
+ */
+function stepLimitSummaryNudge(language: ResponseLanguage): string {
+  const ru =
+    'Лимит шагов этого запуска исчерпан, инструменты больше недоступны. Напиши пользователю итоговый ответ по-русски: что сделано и проверено, что осталось незавершённым (по пунктам, если задач было несколько), и каким был последний шаг. Если последний вызов инструмента упал или закончился таймаутом, скажи об этом прямо — не сообщай об успехе.'
+  const en =
+    'The step limit of this run is exhausted and tools are no longer available. Write the user a final answer: what is done and verified, what is still unfinished (item by item if there were several tasks), and what the last step was. If the last tool call failed or timed out, say so plainly — do not report success.'
+  if (language === 'ru') return ru
+  if (language === 'en') return en
+  return `${ru}\n\n${en}`
+}
+
 async function buildSystemPrompt(
   mode: ChatMode,
   request: ChatSendRequest,
@@ -314,6 +329,11 @@ async function buildSystemPrompt(
   if (request.messages.some((message) => (message.attachments ?? []).length > 0)) {
     rules.push(
       '- The user attached files to their message: pictures and video keyframes arrive as image parts inside the message itself, and text files arrive inline under [file: name]. Never call show_image, read_file or any other tool to open or display them. If an attached picture did not actually reach you (you see only its [image: …] name label and no image), say so in one plain sentence — never guess what it depicts from the file name.'
+    )
+  }
+  if (availableToolNames.includes('show_poster')) {
+    rules.push(
+      '- When you tell the user about a specific subject of the arts — a film, series, ballet, opera, play, painting, album, book, game, or a person of it (actor, director, composer, artist) or a fictional character (Spider-Man, Peter Parker, Sherlock Holmes) — the answer is a poster card, not plain text: call show_poster with a picture link plus its passport (who they are, author/creator, year, a few facts, a closing line) and keep your own text to a couple of sentences around the card. This is the default for "расскажи о…", "что такое…", "кто такой…" questions too, no explicit request needed. Take the passport facts from your own knowledge — do not search the web for information you already know. Go to the web only for one thing: finding the picture to embed (web_search the subject and use a "Page image" link, one search is usually enough), when you do not actually know the facts, or when the user explicitly asks you to search. For characters and people the picture shows the character or the person, and facts carry who created them, first appearance and other useful rows. Answer in plain prose only when the subject is not one specific work or person (comparisons, history of a genre, analysis of several works), the question is about the workspace or code, or the user explicitly asks not to use a card.'
     )
   }
   if (availableToolNames.includes('web_search')) {
@@ -1262,7 +1282,7 @@ export async function runAgent(
    * turn after tool calls without writing anything. Failures are swallowed: the
    * tool results are already on screen and must not be replaced by an error.
    */
-  const readFinalAnswer = async (): Promise<string> => {
+  const readFinalAnswer = async (nudgeText?: string): Promise<string> => {
     const notice = (retry: RetryNotice): void => emit({ requestId, type: 'notice', ...retry })
     const request = (): Record<string, unknown> => ({
       // No reasoning: a nudge for the answer must not restart the thinking that
@@ -1270,7 +1290,7 @@ export async function runAgent(
       ...body(false, false),
       messages: [
         ...messages,
-        { role: 'user', content: finalAnswerNudge(settings.agent.responseLanguage) }
+        { role: 'user', content: nudgeText ?? finalAnswerNudge(settings.agent.responseLanguage) }
       ]
     })
     const stream = await createStreamWithRetry(client, request(), abort.signal, notice).catch(
@@ -1607,12 +1627,19 @@ export async function runAgent(
     // A model that ran tools but wrote no text (some proxies do this on the step
     // after tool results) would leave the user with a bare tool card. Ask once
     // more with tools disabled; only if that also fails, explain the outcome.
+    // A run that hit the step limit mid-work gets the same closing request even
+    // though progress notes streamed: the user still needs the honest summary,
+    // not the transcript cut off mid-sentence.
     if (
       !abort.signal.aborted &&
-      totalText.trim().length === 0 &&
       (stopReason === 'empty-step' || stopReason === 'step-limit')
     ) {
-      const nudged = await readFinalAnswer()
+      const stepLimitWrapUp =
+        stopReason === 'step-limit' && totalText.trim().length > 0
+      const nudged = await readFinalAnswer(
+        stepLimitWrapUp ? stepLimitSummaryNudge(settings.agent.responseLanguage) : undefined
+      )
+      if (nudged.trim().length > 0) answerRaw = nudged
       if (nudged.trim().length > 0) answerRaw = nudged
       if (totalText.trim().length === 0 && !abort.signal.aborted && !sawThinkingLoop) {
         emit({ requestId, type: 'notice', kind: 'no-answer', reason: stopReason, steps })
