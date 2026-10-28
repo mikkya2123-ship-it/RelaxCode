@@ -587,6 +587,22 @@ async function main() {
     return result.result?.result?.value
   }
 
+  // The harness may be started right after the app itself: wait out the React
+  // mount, or the first steps (workspace open, tree, editor) race the stores
+  // and the whole run fails on a perfectly healthy IDE.
+  let storesMounted = false
+  for (let attempt = 0; attempt < 60; attempt++) {
+    try {
+      storesMounted = await evaluate('!!(window.__relaxcode && window.__relaxcode.chat && window.__relaxcode.ui && window.__relaxcode.editor)')
+    } catch {
+      // page navigated between polls — keep waiting
+      storesMounted = false
+    }
+    if (storesMounted) break
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  log('stores mounted', storesMounted ? 'yes' : 'NO (continuing anyway)')
+
   // An interrupted run can leave a chat mid-stream, and `send` answers false
   // while any chat is streaming — so start from a quiet state. A run that was
   // killed before its cleanup can also leave its throwaway chat behind; report
