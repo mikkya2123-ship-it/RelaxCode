@@ -1590,7 +1590,18 @@ export const TOOLS: ToolDef[] = [
   ...WEB_TOOLS
 ]
 
-export function toolsForMode(mode: ChatMode): ToolDef[] {
+/**
+ * Pure chat mode offers no workspace access at all: the model answers in text,
+ * looks things up on the web and shows pictures. Everything that reads, changes
+ * or runs the project — files, search, git, terminal, todos and the connected
+ * MCP applications — stays out of the tool list.
+ */
+const CHAT_TOOL_NAMES = new Set(['web_search', 'fetch_url', 'show_image', 'show_poster', 'draw_figure'])
+
+/** The settings-driven switch-off list: explicitly disabled tools plus tools
+ * that depend on a disabled feature (run_command, background servers, web
+ * search, visuals). */
+function settingsDisabledTools(): Set<string> {
   const settings = cfg()
   const disabled = new Set(settings.tools.disabled)
   if (!settings.servers.allowRunCommand) disabled.add('run_command')
@@ -1606,13 +1617,22 @@ export function toolsForMode(mode: ChatMode): ToolDef[] {
   }
   if (!settings.visuals.posterEnabled) disabled.add('show_poster')
   if (!settings.visuals.figuresEnabled) disabled.add('draw_figure')
+  return disabled
+}
+
+export function toolsForMode(mode: ChatMode): ToolDef[] {
+  const disabled = settingsDisabledTools()
+  // Pure chat: text answers plus web lookups and picture/figure presentation.
+  if (mode === 'chat') return TOOLS.filter((tool) => CHAT_TOOL_NAMES.has(tool.name))
   const base = mode === 'agent' ? TOOLS : TOOLS.filter((tool) => tool.risk === 'read')
   // Tools of connected MCP servers join the registry dynamically: only trusted,
   // enabled and currently ready servers contribute, so the model never sees
-  // names it cannot call. Chat and plan keep their read-only rule.
-  const mcp = mcpToolDefs().filter(
-    (tool) => !disabled.has(tool.name) && (mode === 'agent' || tool.risk === 'read')
-  )
+  // names it cannot call. Plan keeps the read-only rule; pure chat excludes
+  // them entirely.
+  const mcp =
+    mode === 'agent'
+      ? mcpToolDefs().filter((tool) => !disabled.has(tool.name))
+      : mcpToolDefs().filter((tool) => !disabled.has(tool.name) && tool.risk === 'read')
   // The Blender recipe palette joins only when its server is connected.
   const palette =
     mode === 'agent' && !disabled.has('blender_recipe') ? blenderPaletteDefs() : []
