@@ -3,3 +3,7 @@ out/
 dist/
 *.log
 .DS_Store
+.sharrowkin/
+.env
+.env.*
+*.local
