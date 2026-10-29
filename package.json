@@ -1,0 +1,129 @@
+{
+  "name": "relaxcode",
+  "version": "0.1.0",
+  "description": "RelaxCode — AI-powered IDE",
+  "main": "./out/main/index.js",
+  "author": {
+    "name": "Misha",
+    "email": "misha@localhost"
+  },
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "npm run build && electron-builder --win",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "smoke": "node scripts/smoke.mjs",
+    "catalog": "node scripts/build-provider-catalog.mjs",
+    "logos": "node scripts/build-provider-logos.mjs",
+    "test:parser": "node scripts/text-tool-calls.test.mjs",
+    "test:url": "node scripts/base-url.test.mjs",
+    "test:reasoning": "node scripts/reasoning.test.mjs",
+    "test:repetition": "node scripts/repetition.test.mjs",
+    "test:memory": "node scripts/model-memory.test.mjs",
+    "test:markdown": "node scripts/markdown.test.mjs",
+    "test:recipes": "node scripts/recipes.test.mjs",
+    "test:backup": "node scripts/backup.test.mjs",
+    "test:mcp": "node scripts/mcp.test.mjs",
+    "test:proc": "node scripts/proc.test.mjs",
+    "test:terminal": "node scripts/terminal.test.mjs",
+    "test:bg": "node scripts/background.test.mjs",
+    "test:saving": "node scripts/token-saving.test.mjs",
+    "test:entries": "node scripts/entries.test.mjs",
+    "test:websearch": "node scripts/web-search.test.mjs",
+    "test:figures": "node scripts/figures.test.mjs",
+    "test:visuals": "node scripts/visuals.test.mjs",
+    "test:attachments": "node scripts/attachments.test.mjs",
+    "test:agenttools": "node scripts/agent-tools.test.mjs",
+    "test:diff": "node scripts/diff.test.mjs",
+    "test:language": "node scripts/language.test.mjs",
+    "test:i18n": "node scripts/i18n.test.mjs",
+    "test:exchange-log": "node scripts/exchange-log.test.mjs",
+    "test:call-loop": "node scripts/call-loop.test.mjs",
+    "test:skills": "node scripts/skills.test.mjs",
+    "test": "npm run test:parser && npm run test:url && npm run test:reasoning && npm run test:repetition && npm run test:memory && npm run test:markdown && npm run test:recipes && npm run test:mcp && npm run test:backup && npm run test:proc && npm run test:terminal && npm run test:bg && npm run test:saving && npm run test:entries && npm run test:websearch && npm run test:figures && npm run test:visuals && npm run test:attachments && npm run test:diff && npm run test:agenttools && npm run test:language && npm run test:i18n && npm run test:exchange-log && npm run test:call-loop && npm run test:skills"
+  },
+  "devDependencies": {
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-checkbox": "^1.4.1",
+    "@radix-ui/react-dialog": "^1.3.1",
+    "@radix-ui/react-dropdown-menu": "^2.2.1",
+    "@radix-ui/react-label": "^2.1.17",
+    "@radix-ui/react-popover": "^1.3.1",
+    "@radix-ui/react-scroll-area": "^1.4.0",
+    "@radix-ui/react-select": "^2.4.1",
+    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@radix-ui/react-switch": "^1.4.1",
+    "@radix-ui/react-tabs": "^1.2.1",
+    "@radix-ui/react-tooltip": "^1.4.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "lucide-react": "^1.59.0",
+    "monaco-editor": "^0.57.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "zustand": "^5.0.15"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "chokidar": "^5.0.0",
+    "motion": "^14.7.1",
+    "openai": "^7.36.0"
+  },
+  "build": {
+    "appId": "com.relaxcode.ide",
+    "productName": "RelaxCode",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**"
+    ],
+    "asar": true,
+    "icon": "build/icon.ico",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "RelaxCode-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RelaxCode",
+      "uninstallDisplayName": "RelaxCode",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "license": "build/license.txt"
+    }
+  }
+}

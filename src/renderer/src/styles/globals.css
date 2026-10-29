@@ -1,0 +1,596 @@
+@import 'tailwindcss';
+
+/*
+ * The app switches themes by toggling `.dark` on <html> (see applyAppearance),
+ * not by the OS preference alone. Binding the `dark:` variant to that class
+ * keeps utility-based colours and the logo in sync with the chosen theme.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans: 'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-panel: var(--panel);
+  --color-pressed: var(--pressed);
+  --color-tertiary: var(--tertiary);
+  --color-success: var(--success);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-pop: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 2px 6px rgba(0, 0, 0, 0.05), 0 24px 64px rgba(0, 0, 0, 0.16);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  --background: #fafafa;
+  --foreground: #1c1c1e;
+  --card: #ffffff;
+  --card-foreground: #1c1c1e;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1e;
+  --primary: #1c1c1e;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f7;
+  --secondary-foreground: #1c1c1e;
+  --muted: #f5f5f7;
+  --muted-foreground: #6e6e73;
+  --accent: #f0f0f2;
+  --accent-foreground: #1c1c1e;
+  --destructive: #e5484d;
+  --destructive-foreground: #ffffff;
+  --border: #e6e6e8;
+  --input: #e2e2e4;
+  --ring: #c9c9ce;
+  --panel: #f5f5f7;
+  --pressed: #e8e8ea;
+  --tertiary: #a1a1a6;
+  --success: #3d9e63;
+
+  /* The thinking scale: cold at "off", hot under the handle at "high". Hue
+     travels one way round the wheel and the lightness stays even, which is what
+     keeps a warm-up gradient looking calm instead of like a bag of sweets. */
+  --think-1: hsl(236 62% 56%);
+  --think-2: hsl(252 66% 58%);
+  --think-3: hsl(272 68% 58%);
+  --think-4: hsl(294 66% 58%);
+  --think-5: hsl(328 70% 58%);
+  --think-6: hsl(12 80% 58%);
+  --think-glow: hsla(300 70% 60% / 0.35);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-sm text-foreground antialiased;
+    overflow: hidden;
+  }
+
+  /* Only the code editor reads as a rounded surface; side panels stay separate. */
+  .workspace-shell {
+    background: var(--card);
+  }
+
+  ::selection {
+    background: rgba(28, 28, 30, 0.12);
+  }
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+/*
+ * Dark theme: the same semantic variables, so every component that uses
+ * `bg-card` / `text-muted-foreground` follows along without knowing about it.
+ */
+.dark {
+  --background: #17171a;
+  --foreground: #ececf0;
+  --card: #1d1d21;
+  --card-foreground: #ececf0;
+  --popover: #212126;
+  --popover-foreground: #ececf0;
+  --primary: #ececf0;
+  --primary-foreground: #1a1a1d;
+  --secondary: #26262b;
+  --secondary-foreground: #ececf0;
+  --muted: #26262b;
+  --muted-foreground: #9a9aa2;
+  --accent: #2a2a31;
+  --accent-foreground: #ececf0;
+  --destructive: #ff6b6b;
+  --destructive-foreground: #1a1a1d;
+  --border: #2e2e34;
+  --input: #33333a;
+  --ring: #4d4d57;
+  --panel: #1b1b1f;
+  --pressed: #30303a;
+  --tertiary: #74747e;
+  --success: #58c07c;
+
+  --think-1: hsl(232 78% 64%);
+  --think-2: hsl(252 80% 66%);
+  --think-3: hsl(274 82% 66%);
+  --think-4: hsl(296 82% 66%);
+  --think-5: hsl(328 84% 66%);
+  --think-6: hsl(14 88% 64%);
+  --think-glow: hsla(300 80% 66% / 0.42);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 2px 4px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 4px 10px rgba(0, 0, 0, 0.4), 0 28px 70px rgba(0, 0, 0, 0.6);
+}
+
+.dark ::selection {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* Settings → Interface → Animations off. */
+.no-animations *,
+.no-animations *::before,
+.no-animations *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.24);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@keyframes ec-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ec-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ec-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ec-pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes ec-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ec-slide-up {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+/* Long model names: two copies, shifted by exactly one copy per loop. */
+@keyframes ec-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.model-marquee {
+  animation: ec-marquee var(--marquee-duration, 8s) linear infinite;
+  will-change: transform;
+}
+
+.animate-fade-in {
+  animation: ec-fade-in 140ms ease-out;
+}
+
+.animate-pop-in {
+  animation: ec-pop-in 160ms ease-out;
+}
+
+.animate-slide-down {
+  animation: ec-slide-down 160ms ease-out;
+}
+
+/* Radix keeps a closed layer mounted until its exit animation ends, so a popup
+   without one would sit on screen (and swallow clicks) forever. */
+.animate-pop-in[data-state='closed'] {
+  animation: ec-pop-out 120ms ease-in forwards;
+}
+
+.animate-fade-in[data-state='closed'] {
+  animation: ec-fade-out 100ms ease-in forwards;
+}
+
+.animate-slide-down[data-state='closed'] {
+  animation: ec-slide-up 120ms ease-in forwards;
+}
+
+/* ------------------------------------------------------------------- *
+ * Composer focus flash — on focus a soft light appears along the top
+ * edge of the input, slides a little way down and gently melts away.
+ * ------------------------------------------------------------------- */
+
+.composer-frame {
+  position: relative;
+  overflow: hidden;
+}
+
+.composer-flash {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+}
+
+/* The light: brightest on the top edge, fading downward. */
+.composer-frame:focus-within .composer-flash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, var(--ring), transparent 65%);
+  opacity: 0.5;
+  animation: ec-composer-flash-down 700ms ease-out forwards;
+}
+
+/* A second, brighter top line that sinks a few pixels and dissolves. */
+.composer-frame:focus-within .composer-flash::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, var(--ring), transparent);
+  animation: ec-composer-flash-line 700ms ease-out forwards;
+}
+
+/* Sinks a little way down and fades out completely. */
+@keyframes ec-composer-flash-line {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* The soft glow just follows the line down, weaker and slower. */
+@keyframes ec-composer-flash-down {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ------------------------------------------------------------------- *
+ * Thinking scale — the warm-up rail of the thinking slider and the chip
+ * that mirrors it in the composer. The colour holds still (cold on the
+ * left, hot on the right) while one soft band of light glides over it,
+ * the way light moves on water.
+ * ------------------------------------------------------------------- */
+
+.think-rail-gradient {
+  background-image: linear-gradient(
+    90deg,
+    var(--think-1) 0%,
+    var(--think-2) 20%,
+    var(--think-3) 40%,
+    var(--think-4) 60%,
+    var(--think-5) 80%,
+    var(--think-6) 100%
+  );
+  background-repeat: no-repeat;
+  /* The sweep layers below roam far outside this box (up to 282% sideways).
+     Clipping them here, at the element itself, instead of relying on an
+     ancestor's overflow: composited transforms have been seen painting past
+     a parent's rounded clip, which leaks the gradient out of the icon. */
+  overflow: hidden;
+  border-radius: inherit;
+  /* A glass tube: a thin light along the top edge, shade along the bottom. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.dark .think-rail-gradient {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* The colour itself stays put — cold on the left, hot on the right — and the
+   life comes from one soft band of light gliding over it. That is the same
+   trick as the "thinking" shimmer in Codex: a single feathered highlight, never
+   a row of stripes, with a rest between passes. */
+.think-rail-gradient::before,
+.think-rail-gradient::after {
+  content: '';
+  position: absolute;
+  top: -40%;
+  height: 180%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.think-rail-gradient::before {
+  left: -55%;
+  width: 55%;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0;
+  animation: ec-think-sweep 5.6s cubic-bezier(0.4, 0, 0.3, 1) infinite;
+}
+
+.think-rail-gradient::after {
+  left: -70%;
+  width: 70%;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.13) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: ec-think-drift 9s ease-in-out infinite alternate;
+}
+
+/* One pass, then a rest: light on water does not run like a conveyor belt. */
+@keyframes ec-think-sweep {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  62% {
+    transform: translateX(282%);
+    opacity: 1;
+  }
+  72% {
+    transform: translateX(282%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(282%);
+    opacity: 0;
+  }
+}
+
+/* A second, much dimmer band drifting the other way for depth. */
+@keyframes ec-think-drift {
+  from {
+    transform: translateX(-14%);
+  }
+  to {
+    transform: translateX(18%);
+  }
+}
+
+/* A request is in flight: the light stops resting and keeps coming, and the
+   colour itself starts to creep along — the machine is working right now. */
+@keyframes ec-think-sweep-live {
+  0% {
+    transform: translateX(-40%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(320%);
+    opacity: 0;
+  }
+}
+
+.think-live::before {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.62) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: ec-think-sweep-live 2.4s linear infinite;
+}
+
+.think-live::after {
+  animation-duration: 3.6s;
+}
+
+@keyframes ec-think-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--think-glow);
+  }
+  50% {
+    box-shadow: 0 0 0 5px var(--think-glow);
+  }
+}
+
+.think-glow {
+  animation: ec-think-pulse 1.8s ease-in-out infinite;
+}
+
+/* The handle sits inside the same 8px padding the rail uses, so the two line up
+   at both ends; it is 16px wide, hence the `- 16px`. */
+.think-thumb {
+  left: calc(8px + var(--think-at, 0) * (100% - 16px));
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  transition:
+    left 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.think-slider:hover .think-thumb:not([data-dragging='true']) {
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.dark .think-thumb {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* While held, the handle follows the pointer without any easing — it must sit
+   exactly under the cursor; letting go is what glides it onto a stop. */
+.think-thumb[data-dragging='true'] {
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow:
+    0 0 0 5px var(--think-glow),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-pop-in,
+  .animate-slide-down,
+  .model-marquee,
+  .think-glow,
+  .think-rail-gradient::before,
+  .think-rail-gradient::after,
+  .composer-frame:focus-within .composer-flash::before,
+  .composer-frame:focus-within .composer-flash::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
