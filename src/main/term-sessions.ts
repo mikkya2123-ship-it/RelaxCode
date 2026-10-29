@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { homedir, platform } from 'node:os'
 import { IPC } from '@shared/ipc'
 import type { TerminalSessionInfo } from '@shared/ipc'
+import { feedLine, isFileEvent, type FeedEventKind } from '@shared/terminal-feed'
 import { decodeConsoleLine } from './terminal'
 import { killTree } from './proc'
 import { getWorkspaceRoot } from './workspace'
@@ -230,10 +231,19 @@ export function mirrorAgentCommand(command: string, outcome: { ok: boolean; outp
     .split('\n')
     .filter((line) => line.trim() !== '')
     .slice(-12)
-    .map((line) => `  ${line.slice(0, 200)}`)
+    .map((line) => feedLine('output', line.slice(0, 200)))
     .join('\n')
-  const parts = [`❯ ${command.slice(0, 300)}`, tail, outcome.ok ? '' : '  ↳ failed']
+  const parts = [feedLine('command', command.slice(0, 300)), tail, outcome.ok ? '' : feedLine('error', 'failed')]
   send(session, `${parts.filter(Boolean).join('\n')}\n`)
+}
+
+/**
+ * Mirrors one AI file operation (create/write/edit/move/delete) into the feed
+ * as its own coloured event: the renderer frames commands and chips file ops.
+ */
+export function mirrorAgentFileEvent(kind: FeedEventKind, text: string): void {
+  if (!isFileEvent(kind)) return
+  send(agentSession(), `${feedLine(kind, text.slice(0, 300))}\n`)
 }
 
 export function disposeTerminals(): void {

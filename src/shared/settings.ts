@@ -3,6 +3,7 @@ import { FIGURE_THEMES, type FigureTheme } from './figures.ts'
 import type { ThinkingLevel } from './reasoning'
 import type { TokenSaving } from './token-saving'
 import { DEFAULT_TERMINAL_SHELL, type TerminalShell } from './terminal.ts'
+import { DEFAULT_SKILLS_SETTINGS, type SkillsSettings } from './skills.ts'
 import type { WebSearchProvider } from './web-search'
 
 /* ------------------------------------------------------------------------- *
@@ -293,6 +294,8 @@ export interface KeymapSettings {
 export interface SettingsValues {
   approvalMode: ApprovalMode
   agent: AgentSettings
+  /** The design skill library: master switch, disabled skills, edited rules. */
+  skills: SkillsSettings
   tools: ToolsSettings
   webSearch: WebSearchSettings
   visuals: VisualsSettings
@@ -308,6 +311,7 @@ export interface SettingsValues {
 
 export const DEFAULT_SETTINGS: SettingsValues = {
   approvalMode: 'ask',
+  skills: DEFAULT_SKILLS_SETTINGS,
   agent: {
     temperature: 0.2,
     topP: 1,
@@ -551,6 +555,7 @@ export interface SettingsPatch {
   providerUpdate?: ProviderInput & { id: string }
   providerRemove?: string
   agent?: Partial<AgentSettings>
+  skills?: Partial<SkillsSettings>
   tools?: Partial<ToolsSettings>
   webSearch?: Partial<WebSearchSettings>
   visuals?: Partial<VisualsSettings>

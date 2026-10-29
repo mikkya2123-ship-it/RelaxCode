@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { TerminalSessionInfo } from '@shared/ipc'
+import { feedLine } from '@shared/terminal-feed'
 
 /**
  * The IDE terminal panel state: sessions live in the main process (real
@@ -101,7 +102,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     if (!id) return
     window.relaxcode.term.input(id, line)
     set((state) => ({
-      lines: append(state.lines, id, `❯ ${line}`),
+      // The panel frames this echo instead of drawing a bare prompt line.
+      lines: append(state.lines, id, feedLine('command', line)),
       running: { ...state.running, [id]: true },
       history: [...state.history.filter((item) => item !== line), line].slice(-100)
     }))

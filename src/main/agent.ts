@@ -27,6 +27,8 @@ import { requestUi, pushUi } from './ui-bridge'
 import { projectNotesDigest } from './tools-project'
 import { listStates } from './mcp'
 import { dangerousCommand, resolveTerminalShell, type DangerousCommand } from '@shared/terminal'
+import { selectSkill } from '@shared/skill-select'
+import { effectiveSkills, type Skill } from '@shared/skills'
 import { shellSummary } from './terminal'
 import { trimForWire } from './token-saving'
 import { activeProvider, getApiKey, getSettings, type AppSettings } from './store'
@@ -245,7 +247,8 @@ function stepLimitSummaryNudge(language: ResponseLanguage): string {
 async function buildSystemPrompt(
   mode: ChatMode,
   request: ChatSendRequest,
-  settings: AppSettings
+  settings: AppSettings,
+  skill: Skill | null
 ): Promise<string> {
   const root = getWorkspaceRoot()
   const agent = settings.agent
@@ -304,6 +307,16 @@ async function buildSystemPrompt(
   // talks, searches the web and shows pictures.
 
   parts.push(modeGuidance(mode, settings))
+
+  // One craft playbook for this task, chosen from the request. The chat shows
+  // which skill was picked; the answer itself stays about the user's work.
+  if (skill) {
+    parts.push(
+      `Skill in force: "${skill.titleEn}". It sets the standard for everything you produce in this task — apply every rule below. Never mention the skill or these rules in your answer.\n${skill.rules
+        .map((rule) => `- ${rule}`)
+        .join('\n')}`
+    )
+  }
 
   if (request.night === true) {
     parts.push(
@@ -804,14 +817,25 @@ export async function runAgent(
     : settings.agent.maxSteps
   activeRun = { requestId, emit }
 
-  const systemPrompt = await buildSystemPrompt(mode, request, settings)
-  exchange.setSystemPrompt(systemPrompt)
-  const toolDefs = toolsForMode(mode)
-  const tools = toolDefs.map(openAiToolSchema)
-
   const history = request.messages.slice(-settings.agent.historyMessages)
   const lastUserText =
     [...history].reverse().find((message) => message.role === 'user')?.content ?? ''
+
+  // The craft skill for this request is picked before the prompt is built, so
+  // the run starts with its rules and the chat can show which one is active.
+  // A skill the user pinned with `#` wins over the automatic choice; disabled
+  // skills and the master switch come from the settings.
+  const skillCatalog = effectiveSkills(settings.skills)
+  const pinned = request.skillId
+    ? (skillCatalog.find((item) => item.id === request.skillId) ?? null)
+    : null
+  const skill = settings.skills.enabled ? (pinned ?? selectSkill(lastUserText, skillCatalog)) : null
+  if (skill) emit({ requestId, type: 'skill', skillId: skill.id })
+
+  const systemPrompt = await buildSystemPrompt(mode, request, settings, skill)
+  exchange.setSystemPrompt(systemPrompt)
+  const toolDefs = toolsForMode(mode)
+  const tools = toolDefs.map(openAiToolSchema)
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
     ...history.map((message) => {

@@ -16,6 +16,7 @@ import {
   Search,
   Server,
   SlidersHorizontal,
+  Sparkles,
   Wrench,
   X
 } from 'lucide-react'
@@ -48,9 +49,11 @@ import {
   WebSearchKeyControl
 } from './special'
 import { McpServersControl } from './McpServers'
+import { SkillsControl } from './SkillsControl'
 
 const ICONS: Record<string, JSX.Element> = {
   plug: <Plug className="size-4" />,
+  sparkles: <Sparkles className="size-4" />,
   bot: <Bot className="size-4" />,
   wrench: <Wrench className="size-4" />,
   globe: <Globe className="size-4" />,
@@ -310,6 +313,15 @@ function CatalogRow({ def, settings, patch, onAction }: CatalogRowProps): JSX.El
           <ToolsControl
             tools={settings.tools}
             patch={(values) => void patch({ tools: values })}
+          />
+        </Row>
+      )
+    case 'skills':
+      return (
+        <Row def={def} wide>
+          <SkillsControl
+            settings={settings.skills}
+            patch={(values) => void patch(values)}
           />
         </Row>
       )

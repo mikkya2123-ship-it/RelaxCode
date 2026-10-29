@@ -256,6 +256,8 @@ export interface ChatSendRequest {
    * still applies) within the hard limits from the agent settings.
    */
   night?: boolean
+  /** A skill pinned with `#` in the composer; it beats the automatic choice. */
+  skillId?: string
   context: {
     activeFile?: string | null
     openFiles?: string[]
@@ -369,6 +371,8 @@ export type ChatEvent =
   // request is retried without it.
   | { requestId: string; type: 'notice'; kind: 'param-dropped'; param: 'reasoning' | 'sampling' | 'other' }
   | { requestId: string; type: 'notice'; kind: 'image-dropped' }
+  // The design skill picked for this run; the chat shows it above the answer.
+  | { requestId: string; type: 'skill'; skillId: string }
   | { requestId: string; type: 'run-snapshot'; name: string }
   | { requestId: string; type: 'timelapse'; frames: string[]; intervalSec: number }
   // The model's thoughts began repeating themselves; the stream was cut there

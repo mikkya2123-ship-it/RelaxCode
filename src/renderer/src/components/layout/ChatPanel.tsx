@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type JSX,
@@ -22,6 +23,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
+  Sparkles,
   Square,
   Trash2,
   X,
@@ -30,11 +32,12 @@ import {
 import type { ChatMode } from '@shared/ipc'
 import { ATTACHMENT_LIMITS, type AttachmentRef } from '@shared/attachments'
 import { LOOPS_BEFORE_OFF } from '@shared/model-memory'
+import { effectiveSkills, type Skill } from '@shared/skills'
 import { useUiStore } from '@/stores/ui'
 import { useChatStore, type AttachmentPart } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { toast } from '@/stores/toast'
-import { useT, useTranslateError } from '@/lib/i18n'
+import { useI18nStore, useT, useTranslateError } from '@/lib/i18n'
 import { catalogForBaseUrl } from '@/lib/provider-catalog'
 import { createPendingAttachment, processAttachment } from '@/lib/attachments'
 import { Button } from '@/components/ui/button'
@@ -62,6 +65,8 @@ import { TodoPanel } from '@/components/chat/TodoPanel'
 import { ProcessPanel } from '@/components/chat/ProcessPanel'
 import { ApprovalBar } from '@/components/chat/ApprovalBar'
 import { AskUserBar } from '@/components/chat/AskUserBar'
+import { WorkingIndicator } from '@/components/chat/WorkingIndicator'
+import { SkillChip } from '@/components/chat/SkillChip'
 import { cn } from '@/lib/utils'
 
 const MODES: ChatMode[] = ['chat', 'agent', 'plan']
@@ -124,6 +129,10 @@ export function ChatPanel(): JSX.Element {
   const sendOnEnter = chatSettings?.sendOnEnter ?? true
   const autoScroll = chatSettings?.autoScroll ?? true
   const [draft, setDraft] = useState('')
+  // The `#` picker: `skillQuery` is the text typed after `#` (null = closed).
+  const [skillQuery, setSkillQuery] = useState<string | null>(null)
+  const [skillCursor, setSkillCursor] = useState(0)
+  const [pickedSkillId, setPickedSkillId] = useState<string | null>(null)
   /** Files waiting to go out with the next message, alongside their shells. */
   const [draftAttachments, setDraftAttachments] = useState<Array<{ file: File; attachment: AttachmentRef }>>([])
   const [dragOver, setDragOver] = useState(false)
@@ -282,6 +291,45 @@ export function ChatPanel(): JSX.Element {
   // user should see which files are actually about to reach the model.
   const attachmentsBusy = draftAttachments.some((item) => item.attachment.status !== 'ready')
 
+  const locale = useI18nStore((s) => s.locale)
+  const skillsSettings = useSettingsStore((s) => s.settings?.skills)
+  const skills = useMemo(() => effectiveSkills(skillsSettings), [skillsSettings])
+  const pickedSkill = pickedSkillId ? (skills.find((item) => item.id === pickedSkillId) ?? null) : null
+  const skillTitle = (skill: Skill): string => (locale === 'en' ? skill.titleEn : skill.title)
+  const skillSummary = (skill: Skill): string => (locale === 'en' ? skill.summaryEn : skill.summary)
+
+  // What the `#` menu shows: every enabled skill, narrowed by what was typed.
+  const skillMatches = useMemo(() => {
+    if (skillQuery === null) return []
+    const query = skillQuery.trim().toLowerCase()
+    const list =
+      query === ''
+        ? skills
+        : skills.filter((skill) =>
+            `${skill.id} ${skill.title} ${skill.titleEn}`.toLowerCase().includes(query)
+          )
+    return list.slice(0, 6)
+  }, [skillQuery, skills])
+
+  // A bare `#` always opens the list; a word that matches nothing closes it, so
+  // "тикет #123" never leaves a stray popup over the composer.
+  const skillMenuOpen = skillQuery !== null && (skillQuery.trim() === '' || skillMatches.length > 0)
+
+  const chooseSkill = (skill: Skill): void => {
+    const query = skillQuery ?? ''
+    // The `#query` that opened the picker is replaced by the pinned chip.
+    setDraft((current) => current.slice(0, Math.max(0, current.length - query.length - 1)).replace(/\s+$/, ''))
+    setPickedSkillId(skill.id)
+    setSkillQuery(null)
+  }
+
+  const onDraftChange = (value: string): void => {
+    setDraft(value)
+    const match = /(?:^|\s)#([\p{L}\p{N}_-]*)$/u.exec(value)
+    setSkillQuery(match ? match[1] : null)
+    setSkillCursor(0)
+  }
+
   const handleSend = (): void => {
     if (streaming || streamsElsewhere || pendingApproval || pendingQuestion) return
     if (!model) {
@@ -295,7 +343,10 @@ export function ChatPanel(): JSX.Element {
     if (!text.trim() && readyAttachments.length === 0) return
     setDraft('')
     setDraftAttachments([])
-    void send(text, undefined, readyAttachments)
+    setSkillQuery(null)
+    const skillId = pickedSkillId ?? undefined
+    setPickedSkillId(null)
+    void send(text, undefined, readyAttachments, skillId)
   }
 
   /** Mid-run input: interrupt the agent with this message at the next step. */
@@ -317,6 +368,29 @@ export function ChatPanel(): JSX.Element {
   }
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    // While the `#` menu is open it owns the arrows, Enter, Tab and Escape.
+    if (skillMenuOpen) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        const step = event.key === 'ArrowDown' ? 1 : -1
+        const count = Math.max(1, skillMatches.length)
+        setSkillCursor((current) => (current + step + count) % count)
+        return
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        const skill = skillMatches[skillCursor] ?? skillMatches[0]
+        if (skill) {
+          event.preventDefault()
+          chooseSkill(skill)
+          return
+        }
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setSkillQuery(null)
+        return
+      }
+    }
     if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
     // Either Enter sends and Ctrl+Enter breaks the line, or the other way round.
     if (sendOnEnter || event.ctrlKey || event.metaKey) {
@@ -484,6 +558,7 @@ export function ChatPanel(): JSX.Element {
                     key={message.id}
                     className="flex w-full flex-col gap-2 text-[13px] leading-relaxed"
                   >
+                    {message.skillId && <SkillChip skillId={message.skillId} />}
                     {message.parts.map((part, index) =>
                       part.kind === 'text' ? (
                         <Markdown key={index} text={part.text} parts={message.parts} />
@@ -502,12 +577,8 @@ export function ChatPanel(): JSX.Element {
                         />
                       ) : null
                     )}
+                    {message.status === 'streaming' && <WorkingIndicator parts={message.parts} />}
                     <WebSourcesFooter parts={message.parts} />
-                    {message.status === 'streaming' && message.parts.length === 0 && (
-                      <p className="text-tertiary">
-                        <span className="animate-pulse">•••</span>
-                      </p>
-                    )}
                     {message.status === 'error' && (
                       <p
                         data-testid="chat-error"
@@ -693,10 +764,69 @@ export function ChatPanel(): JSX.Element {
                 {t('chat.attach.drop')}
               </div>
             )}
+            {pickedSkill && (
+              <div className="flex flex-wrap items-center gap-1.5 px-2 pt-2" data-testid="chat-skill-pinned">
+                <span className="inline-flex items-center gap-1 rounded-md border border-border bg-panel/70 px-1.5 py-0.5 text-[11px] text-foreground">
+                  <Sparkles className="size-3 shrink-0 text-primary" />
+                  {skillTitle(pickedSkill)}
+                  <button
+                    type="button"
+                    aria-label={t('chat.skill.clear')}
+                    title={t('chat.skill.clear')}
+                    className="rounded p-0.5 text-tertiary transition-colors hover:text-foreground"
+                    onClick={() => setPickedSkillId(null)}
+                  >
+                    <X className="size-2.5" />
+                  </button>
+                </span>
+              </div>
+            )}
+            {skillMenuOpen && (
+              <div
+                data-testid="chat-skill-menu"
+                className="absolute bottom-full left-2 z-30 mb-1 w-[300px] overflow-hidden rounded-lg border border-border bg-popover shadow-pop"
+              >
+                <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-tertiary">
+                  {t('chat.skill.pick')}
+                </p>
+                {skillMatches.length === 0 && (
+                  <p className="px-2 pb-2 text-[11px] text-muted-foreground">
+                    {t('chat.skill.noMatch')}
+                  </p>
+                )}
+                {skillMatches.map((skill, index) => (
+                  <button
+                    key={skill.id}
+                    type="button"
+                    data-testid={`chat-skill-option-${skill.id}`}
+                    // `mousedown` keeps the textarea focused and beats blur.
+                    onMouseDown={(event) => {
+                      event.preventDefault()
+                      chooseSkill(skill)
+                    }}
+                    onMouseEnter={() => setSkillCursor(index)}
+                    className={cn(
+                      'flex w-full items-start gap-2 px-2 py-1.5 text-left',
+                      index === skillCursor ? 'bg-accent' : 'hover:bg-accent/60'
+                    )}
+                  >
+                    <Sparkles className="mt-0.5 size-3 shrink-0 text-primary" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[11.5px] font-medium text-foreground">
+                        {skillTitle(skill)}
+                      </span>
+                      <span className="block truncate text-[10.5px] text-muted-foreground">
+                        {skillSummary(skill)}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             <Textarea
               rows={2}
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => onDraftChange(event.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={(event) => {
                 const files = event.clipboardData?.files

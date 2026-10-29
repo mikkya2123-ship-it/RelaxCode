@@ -4,6 +4,7 @@ import { useT } from '@/lib/i18n'
 import { useTerminalStore } from '@/stores/terminal'
 import { useUiStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
+import { TerminalLine } from './TerminalLine'
 
 /**
  * The terminal dock at the bottom of the editor area: real shells in tabs
@@ -213,17 +214,7 @@ export function TerminalPanel(): JSX.Element {
           <p className="text-tertiary">{isAgent ? t('terminal.agentEmpty') : t('terminal.empty')}</p>
         )}
         {activeLines.map((line, index) => (
-          <div
-            key={index}
-            className={cn(
-              'whitespace-pre-wrap break-all',
-              line.startsWith('❯') && 'text-foreground',
-              line.trim().startsWith('↳') && 'text-destructive',
-              !line.startsWith('❯') && line.trim().startsWith('  ') && 'text-muted-foreground'
-            )}
-          >
-            {line || '\u00a0'}
-          </div>
+          <TerminalLine key={index} line={line} />
         ))}
         {isRunning && <div className="animate-pulse text-tertiary">▍</div>}
       </div>

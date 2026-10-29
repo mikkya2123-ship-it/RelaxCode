@@ -59,6 +59,8 @@ export interface ChatMessage {
   steered?: boolean
   /** Snapshot of the project taken right before this message's run changed files. */
   snapshot?: string
+  /** The skill this run follows; the chat shows its name above the answer. */
+  skillId?: string
   /** When the message was sent (ms since epoch); shown when timestamps are on. */
   at?: number
   promptTokens?: number
@@ -149,7 +151,13 @@ interface ChatState extends ChatView {
   clearAll: () => void
   setMode: (mode: ChatMode) => void
   setThinking: (level: ThinkingLevel) => void
-  send: (text: string, chatId?: string, attachments?: AttachmentRef[]) => Promise<boolean>
+  send: (
+    text: string,
+    chatId?: string,
+    attachments?: AttachmentRef[],
+    /** A skill pinned with `#` in the composer; beats the automatic choice. */
+    skillId?: string
+  ) => Promise<boolean>
   stop: () => void
   /** Puts a message in the queue: it runs after the current task finishes. */
   enqueue: (text: string) => void
@@ -677,7 +685,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       patch(get().activeChatId, (chat) => ({ ...chat, thinking: level }))
     },
 
-    send: async (text, chatId, attachments) => {
+    send: async (text, chatId, attachments, skillId) => {
       const trimmed = text.trim()
       const usable = (attachments ?? []).filter((attachment) => attachment.status !== 'error')
       const state = get()
@@ -744,6 +752,7 @@ export const useChatStore = create<ChatState>((set, get) => {
           thinking: active.thinking,
           night: active.night,
           messages: history,
+          ...(skillId ? { skillId } : {}),
           context: {
             activeFile: editorState.activePath,
             openFiles: editorState.files.map((file) => file.path),
@@ -878,6 +887,16 @@ export const useChatStore = create<ChatState>((set, get) => {
         }
         case 'paused': {
           patch(chatId, (session) => ({ ...session, paused: event.paused }))
+          break
+        }
+        case 'skill': {
+          patch(chatId, (session) => ({
+            ...session,
+            messages: updateStreamingMessage(session.messages, (message) => ({
+              ...message,
+              skillId: event.skillId
+            }))
+          }))
           break
         }
         case 'delta': {

@@ -45,7 +45,8 @@
     "test:i18n": "node scripts/i18n.test.mjs",
     "test:exchange-log": "node scripts/exchange-log.test.mjs",
     "test:call-loop": "node scripts/call-loop.test.mjs",
-    "test": "npm run test:parser && npm run test:url && npm run test:reasoning && npm run test:repetition && npm run test:memory && npm run test:markdown && npm run test:recipes && npm run test:mcp && npm run test:backup && npm run test:proc && npm run test:terminal && npm run test:bg && npm run test:saving && npm run test:entries && npm run test:websearch && npm run test:figures && npm run test:visuals && npm run test:attachments && npm run test:diff && npm run test:agenttools && npm run test:language && npm run test:i18n && npm run test:exchange-log && npm run test:call-loop"
+    "test:skills": "node scripts/skills.test.mjs",
+    "test": "npm run test:parser && npm run test:url && npm run test:reasoning && npm run test:repetition && npm run test:memory && npm run test:markdown && npm run test:recipes && npm run test:mcp && npm run test:backup && npm run test:proc && npm run test:terminal && npm run test:bg && npm run test:saving && npm run test:entries && npm run test:websearch && npm run test:figures && npm run test:visuals && npm run test:attachments && npm run test:diff && npm run test:agenttools && npm run test:language && npm run test:i18n && npm run test:exchange-log && npm run test:call-loop && npm run test:skills"
   },
   "devDependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
@@ -84,6 +85,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "chokidar": "^5.0.0",
+    "motion": "^14.7.1",
     "openai": "^7.36.0"
   },
   "build": {

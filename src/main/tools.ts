@@ -19,7 +19,7 @@ import { homeCwd } from '@shared/run-cwd'
 import { mcpToolDefs } from './mcp'
 import { blenderPaletteDefs } from './blender-palette'
 import { backupFile, displayRelative } from './backup'
-import { mirrorAgentCommand } from './term-sessions'
+import { mirrorAgentCommand, mirrorAgentFileEvent } from './term-sessions'
 import { diffText } from '@shared/diff'
 import type { DiffMeta } from '@shared/tool-meta'
 import { GIT_TOOLS } from './tools-git'
@@ -272,9 +272,9 @@ const writeFileTool: ToolDef = {
     const diff = before !== null ? diffText(before, content, relPath(target)) : null
     const counts: { added: number; removed: number } =
       diff ?? { added: lines, removed: 0 }
-    mirrorAgentCommand(
-      `${before === null ? '✎ создать' : '✎ перезаписать'} ${relPath(target)} (+${counts.added} −${counts.removed})`,
-      { ok: true, output: '' }
+    mirrorAgentFileEvent(
+      before === null ? 'file-create' : 'file-write',
+      `${relPath(target)} (+${counts.added} −${counts.removed})`
     )
     return {
       ok: true,
@@ -320,7 +320,7 @@ const editFileTool: ToolDef = {
     const updated = replaceAll ? content.split(oldString).join(newString) : content.replace(oldString, newString)
     await fs.writeFile(target, updated, 'utf8')
     const diff = diffText(content, updated, relPath(target))
-    mirrorAgentCommand(`✎ ${relPath(target)} (+${diff.added} −${diff.removed})`, { ok: true, output: '' })
+    mirrorAgentFileEvent('file-edit', `${relPath(target)} (+${diff.added} −${diff.removed})`)
     return {
       ok: true,
       summary: `edited ${relPath(target)} (+${diff.added} −${diff.removed}, ${replaceAll ? occurrences : 1} replacement${occurrences > 1 ? 's' : ''})`,
@@ -360,6 +360,7 @@ const deletePathTool: ToolDef = {
       } else {
         await fs.rm(target, { recursive: true, force: true })
       }
+      mirrorAgentFileEvent('file-delete', `${relPath(target)}/`)
       return {
         ok: true,
         summary: `deleted directory ${relPath(target)}${toTrash ? ' (moved to trash)' : ''}`,
@@ -371,7 +372,7 @@ const deletePathTool: ToolDef = {
     } else {
       await fs.unlink(target)
     }
-    mirrorAgentCommand(`🗑 удалить ${relPath(target)}`, { ok: true, output: '' })
+    mirrorAgentFileEvent('file-delete', relPath(target))
     return {
       ok: true,
       summary: `deleted ${relPath(target)}${toTrash ? ' (moved to trash)' : ''}`,
@@ -399,7 +400,7 @@ const movePathTool: ToolDef = {
     if (!stat) throw new ToolError(`Source not found: ${relPath(from)}`)
     await fs.mkdir(dirname(to), { recursive: true })
     await fs.rename(from, to)
-    mirrorAgentCommand(`→ ${relPath(from)} → ${relPath(to)}`, { ok: true, output: '' })
+    mirrorAgentFileEvent('file-move', `${relPath(from)} → ${relPath(to)}`)
     return { ok: true, summary: `moved ${relPath(from)} → ${relPath(to)}`, detail: 'Move complete.' }
   }
 }

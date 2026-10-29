@@ -11,6 +11,7 @@ import { FIGURE_THEMES } from '@shared/figures'
 
 export type SectionId =
   | 'connection'
+  | 'skills'
   | 'agent'
   | 'tools'
   | 'webSearch'
@@ -33,6 +34,7 @@ export interface SectionDef {
 
 export const SECTIONS: SectionDef[] = [
   { id: 'connection', label: 'settings.section.connection', icon: 'plug' },
+  { id: 'skills', label: 'settings.section.skills', icon: 'sparkles' },
   { id: 'agent', label: 'settings.section.agent', icon: 'bot' },
   { id: 'tools', label: 'settings.section.tools', icon: 'wrench' },
   { id: 'webSearch', label: 'settings.section.webSearch', icon: 'globe' },
@@ -66,6 +68,7 @@ export type Control =
   | { kind: 'accent' }
   | { kind: 'keymap' }
   | { kind: 'tools' }
+  | { kind: 'skills' }
   | { kind: 'providers' }
   | { kind: 'mcpServers' }
   | { kind: 'webSearchKey' }
@@ -1238,6 +1241,17 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.servers.verifyServers.hint',
     control: { kind: 'switch' },
     keywords: 'проверка сервера fetch_url'
+  },
+
+  // ------------------------------------------------------------ design skills
+  {
+    id: 'skills.library',
+    section: 'skills',
+    label: 'settings.skills.library',
+    hint: 'settings.skills.hint',
+    control: { kind: 'skills' },
+    keywords:
+      'скиллы skills дизайн лендинг 3d blender типографика правила плейбук выключить отредактировать'
   },
 
   // ------------------------------------------------- applications & MCP servers

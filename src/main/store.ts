@@ -17,6 +17,7 @@ import { THINKING_LEVELS } from '@shared/reasoning'
 import { TOKEN_SAVING_MODES } from '@shared/token-saving'
 import { WEB_SEARCH_PROVIDERS } from '@shared/web-search'
 import { FIGURE_THEMES } from '@shared/figures'
+import { DEFAULT_SKILLS_SETTINGS, skillById, type SkillsSettings } from '@shared/skills'
 import {
   ACCENTS,
   asBoolean,
@@ -144,6 +145,11 @@ function normalize(raw: Partial<AppSettings> & LegacySettings): AppSettings {
   const values: SettingsValues = {
     approvalMode: (raw.approvalMode ?? DEFAULT_SETTINGS.approvalMode) as ApprovalMode,
     agent: mergeDefaults(DEFAULT_SETTINGS.agent, sanitizeAgent(raw.agent)),
+    // `overrides` is a list of winners, so the stored list is taken whole.
+    skills: {
+      ...DEFAULT_SKILLS_SETTINGS,
+      ...sanitizeSkills(raw.skills as Partial<SkillsSettings>)
+    },
     tools: mergeDefaults(DEFAULT_SETTINGS.tools, sanitizeTools(raw.tools)),
     webSearch: mergeDefaults(DEFAULT_SETTINGS.webSearch, sanitizeWebSearch(raw.webSearch)),
     visuals: mergeDefaults(DEFAULT_SETTINGS.visuals, sanitizeVisuals(raw.visuals)),
@@ -285,6 +291,7 @@ function toValues(settings: AppSettings): SettingsValues {
   return {
     approvalMode: settings.approvalMode,
     agent: settings.agent,
+    skills: settings.skills,
     tools: settings.tools,
     webSearch: settings.webSearch,
     visuals: settings.visuals,
@@ -478,6 +485,38 @@ function sanitizeAgent(value: unknown): Partial<SettingsValues['agent']> {
   }
   if (raw.nightTimeoutMin !== undefined) {
     out.nightTimeoutMin = Math.round(asNumber(raw.nightTimeoutMin, 1, 1440, d.nightTimeoutMin))
+  }
+  return out
+}
+
+/**
+ * Skills come from the settings file and from the renderer, so both are treated
+ * as untrusted: only known ids survive, rules are trimmed and length-capped,
+ * and a disabled entry is dropped when the skill no longer exists.
+ */
+function sanitizeSkills(value: Partial<SkillsSettings>): Partial<SkillsSettings> {
+  const raw = (value ?? {}) as Record<string, unknown>
+  const out: Partial<SkillsSettings> = {}
+  if (typeof raw.enabled === 'boolean') out.enabled = raw.enabled
+  if (Array.isArray(raw.disabled)) {
+    out.disabled = [...new Set(raw.disabled.filter((id): id is string => typeof id === 'string' && skillById(id) !== null))]
+  }
+  if (Array.isArray(raw.overrides)) {
+    const seen = new Set<string>()
+    out.overrides = []
+    for (const entry of raw.overrides) {
+      const item = entry as { id?: unknown; rules?: unknown }
+      if (typeof item.id !== 'string' || skillById(item.id) === null || seen.has(item.id)) continue
+      if (!Array.isArray(item.rules)) continue
+      const rules = item.rules
+        .filter((rule): rule is string => typeof rule === 'string')
+        .map((rule) => rule.replace(/[\r\n]+/g, ' ').trim().slice(0, 500))
+        .filter((rule) => rule.length > 0)
+        .slice(0, 40)
+      if (rules.length === 0) continue
+      seen.add(item.id)
+      out.overrides.push({ id: item.id, rules })
+    }
   }
   return out
 }
@@ -741,6 +780,11 @@ export function applySettingsPatch(patch: SettingsPatch): SettingsSaveResult {
     ...current,
     providers: current.providers.map((provider) => ({ ...provider })),
     agent: { ...current.agent },
+    skills: {
+      ...current.skills,
+      disabled: [...current.skills.disabled],
+      overrides: current.skills.overrides.map((override) => ({ ...override, rules: [...override.rules] }))
+    },
     tools: { ...current.tools },
     webSearch: { ...current.webSearch },
     visuals: { ...current.visuals },
@@ -757,6 +801,7 @@ export function applySettingsPatch(patch: SettingsPatch): SettingsSaveResult {
   if (patch.approvalMode !== undefined) next.approvalMode = patch.approvalMode
 
   if (patch.agent) Object.assign(next.agent, sanitizeAgent(patch.agent))
+  if (patch.skills) Object.assign(next.skills, sanitizeSkills(patch.skills))
   if (patch.tools) Object.assign(next.tools, sanitizeTools(patch.tools))
   if (patch.webSearch) Object.assign(next.webSearch, sanitizeWebSearch(patch.webSearch))
   if (patch.visuals) Object.assign(next.visuals, sanitizeVisuals(patch.visuals))
