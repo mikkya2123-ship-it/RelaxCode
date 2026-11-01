@@ -1,3 +1,0 @@
-@echo off
-chcp 65001 >nul
-node "%~dp0src\mcp.mjs"
