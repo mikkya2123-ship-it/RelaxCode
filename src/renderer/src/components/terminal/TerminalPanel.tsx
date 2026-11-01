@@ -120,6 +120,7 @@ export function TerminalPanel(): JSX.Element {
       className="relative flex shrink-0 flex-col overflow-hidden rounded-t-[12px] border border-b-0 border-border bg-panel shadow-[0_-4px_16px_rgba(0,0,0,0.06)]"
       style={{ height }}
       data-testid="terminal-panel"
+      data-slot="terminal-panel"
     >
       {/* The grabbable top edge. */}
       <div

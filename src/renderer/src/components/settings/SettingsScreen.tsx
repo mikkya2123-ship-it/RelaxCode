@@ -153,7 +153,7 @@ export function SettingsScreen(): JSX.Element {
         <header className="flex h-12 shrink-0 items-center gap-3 px-4">
           <h1 className="text-[15px] font-semibold text-foreground">{t('settings.title')}</h1>
           <div className="relative ml-2 w-[320px]">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-tertiary" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-tertiary" />
             <Input
               value={query}
               data-testid="settings-search"

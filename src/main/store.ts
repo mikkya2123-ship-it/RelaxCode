@@ -25,15 +25,22 @@ import {
   asNumber,
   asString,
   asStringList,
+  AUTO_CLOSE,
+  AUTO_INDENT,
   AUTOSAVE_MODES,
   CURSOR_BLINKING,
+  CURSOR_CARET,
   DEFAULT_SETTINGS,
   DENSITIES,
+  FOLDING_CONTROLS,
   LANGUAGES,
   LINE_HIGHLIGHTS,
   LINE_NUMBERS,
   LOG_LEVELS,
+  MATCH_BRACKETS,
   mergeDefaults,
+  MULTI_CURSOR,
+  OCCURRENCES,
   RESPONSE_LANGUAGES,
   THEMES,
   VISUAL_MODES,
@@ -448,6 +455,13 @@ function sanitizeAgent(value: unknown): Partial<SettingsValues['agent']> {
   if (raw.retryBaseSeconds !== undefined) {
     out.retryBaseSeconds = Math.round(asNumber(raw.retryBaseSeconds, 1, 120, d.retryBaseSeconds))
   }
+  if (raw.presencePenalty !== undefined) {
+    out.presencePenalty = asNumber(raw.presencePenalty, -2, 2, d.presencePenalty)
+  }
+  if (raw.frequencyPenalty !== undefined) {
+    out.frequencyPenalty = asNumber(raw.frequencyPenalty, -2, 2, d.frequencyPenalty)
+  }
+  if (raw.seed !== undefined) out.seed = Math.round(asNumber(raw.seed, -1, 2147483646, d.seed))
   if (raw.contextActiveFile !== undefined) out.contextActiveFile = asBoolean(raw.contextActiveFile, d.contextActiveFile)
   if (raw.contextOpenFiles !== undefined) out.contextOpenFiles = asBoolean(raw.contextOpenFiles, d.contextOpenFiles)
   if (raw.rulesEnabled !== undefined) out.rulesEnabled = asBoolean(raw.rulesEnabled, d.rulesEnabled)
@@ -630,6 +644,54 @@ function sanitizeEditor(value: unknown): Partial<SettingsValues['editor']> {
   if (raw.autoSaveDelayMs !== undefined) {
     out.autoSaveDelayMs = Math.round(asNumber(raw.autoSaveDelayMs, 200, 60000, d.autoSaveDelayMs))
   }
+  if (raw.cursorSmoothCaret !== undefined) {
+    out.cursorSmoothCaret = asChoice(raw.cursorSmoothCaret, CURSOR_CARET, d.cursorSmoothCaret)
+  }
+  if (raw.cursorWidth !== undefined) {
+    out.cursorWidth = Math.round(asNumber(raw.cursorWidth, 1, 20, d.cursorWidth))
+  }
+  if (raw.folding !== undefined) out.folding = asBoolean(raw.folding, d.folding)
+  if (raw.showFoldingControls !== undefined) {
+    out.showFoldingControls = asChoice(raw.showFoldingControls, FOLDING_CONTROLS, d.showFoldingControls)
+  }
+  if (raw.matchBrackets !== undefined) {
+    out.matchBrackets = asChoice(raw.matchBrackets, MATCH_BRACKETS, d.matchBrackets)
+  }
+  if (raw.occurrencesHighlight !== undefined) {
+    out.occurrencesHighlight = asChoice(raw.occurrencesHighlight, OCCURRENCES, d.occurrencesHighlight)
+  }
+  if (raw.selectionHighlight !== undefined) {
+    out.selectionHighlight = asBoolean(raw.selectionHighlight, d.selectionHighlight)
+  }
+  if (raw.copyWithSyntaxHighlighting !== undefined) {
+    out.copyWithSyntaxHighlighting = asBoolean(raw.copyWithSyntaxHighlighting, d.copyWithSyntaxHighlighting)
+  }
+  if (raw.multiCursorModifier !== undefined) {
+    out.multiCursorModifier = asChoice(raw.multiCursorModifier, MULTI_CURSOR, d.multiCursorModifier)
+  }
+  if (raw.mouseWheelZoom !== undefined) out.mouseWheelZoom = asBoolean(raw.mouseWheelZoom, d.mouseWheelZoom)
+  if (raw.linkedEditing !== undefined) out.linkedEditing = asBoolean(raw.linkedEditing, d.linkedEditing)
+  if (raw.autoClosingBrackets !== undefined) {
+    out.autoClosingBrackets = asChoice(raw.autoClosingBrackets, AUTO_CLOSE, d.autoClosingBrackets)
+  }
+  if (raw.autoClosingQuotes !== undefined) {
+    out.autoClosingQuotes = asChoice(raw.autoClosingQuotes, AUTO_CLOSE, d.autoClosingQuotes)
+  }
+  if (raw.autoIndent !== undefined) out.autoIndent = asChoice(raw.autoIndent, AUTO_INDENT, d.autoIndent)
+  if (raw.dragAndDrop !== undefined) out.dragAndDrop = asBoolean(raw.dragAndDrop, d.dragAndDrop)
+  if (raw.emptySelectionClipboard !== undefined) {
+    out.emptySelectionClipboard = asBoolean(raw.emptySelectionClipboard, d.emptySelectionClipboard)
+  }
+  if (raw.formatOnPaste !== undefined) out.formatOnPaste = asBoolean(raw.formatOnPaste, d.formatOnPaste)
+  if (raw.overviewRulerBorder !== undefined) {
+    out.overviewRulerBorder = asBoolean(raw.overviewRulerBorder, d.overviewRulerBorder)
+  }
+  if (raw.scrollbarSize !== undefined) {
+    out.scrollbarSize = Math.round(asNumber(raw.scrollbarSize, 4, 24, d.scrollbarSize))
+  }
+  if (raw.highlightActiveIndentGuide !== undefined) {
+    out.highlightActiveIndentGuide = asBoolean(raw.highlightActiveIndentGuide, d.highlightActiveIndentGuide)
+  }
   return out
 }
 
@@ -656,6 +718,8 @@ function sanitizeUi(value: unknown): Partial<SettingsValues['ui']> {
   if (raw.screenWidth !== undefined) {
     out.screenWidth = Math.round(asNumber(raw.screenWidth, 280, 720, d.screenWidth))
   }
+  if (raw.closeToTray !== undefined) out.closeToTray = asBoolean(raw.closeToTray, d.closeToTray)
+  if (raw.liquidGlass !== undefined) out.liquidGlass = asBoolean(raw.liquidGlass, d.liquidGlass)
   return out
 }
 

@@ -3,10 +3,12 @@ import { basename, dirname, join, resolve, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import type { DirEntry } from '@shared/ipc'
 import { getSettings } from './store'
+import { logEvent } from './logger'
 
 export const IGNORED_NAMES = new Set([
   'node_modules',
   '.git',
+  '.godot',
   'dist',
   'out',
   'build',
@@ -60,6 +62,12 @@ export async function setWorkspaceRoot(path: string): Promise<string> {
     depth: MAX_WATCH_DEPTH,
     ignored: (p: string) => ignoredNames.has(basename(p)),
     awaitWriteFinish: { stabilityThreshold: 250, pollInterval: 80 }
+  })
+  // Godot's editor churns temp files inside `.godot/` and Windows locks them
+  // mid-rename (EBUSY) — without this handler every such rename becomes an
+  // unhandledRejection. The tree refreshes on the next real change anyway.
+  watcher.on('error', (error) => {
+    logEvent('info', `workspace watcher: ${error instanceof Error ? error.message : String(error)}`)
   })
 
   const pending = new Set<string>()

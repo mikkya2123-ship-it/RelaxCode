@@ -11,11 +11,14 @@ import { matchesCombo } from '@/lib/keymap'
 import { useUiBridge } from '@/lib/ui-events'
 import { maybeRunMorningBriefing } from '@/lib/briefing'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { Toaster } from '@/components/ui/toaster'
 import { TitleBar } from '@/components/layout/TitleBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { EditorArea } from '@/components/layout/EditorArea'
 import { ChatPanel } from '@/components/layout/ChatPanel'
+import { ArenaScreen } from '@/components/arena/ArenaScreen'
+import { useArenaStore } from '@/stores/arena'
+import { useTeamStore } from '@/stores/team'
+import { TeamScreen } from '@/components/team/TeamScreen'
 import { ScreenPanel } from '@/components/screen/ScreenPanel'
 import { StatusBar } from '@/components/layout/StatusBar'
 import { SettingsScreen } from '@/components/settings/SettingsScreen'
@@ -100,6 +103,12 @@ export default function App(): JSX.Element {
           explorer.beginRename(entry)
         }
       } else if (keymap.deleteEntry && matchesCombo(event, keymap.deleteEntry)) {
+        const multi = explorer.multiSelected
+        if (multi.length > 0) {
+          event.preventDefault()
+          explorer.requestMultiDelete(multi)
+          return
+        }
         const entry = explorer.getEntry(explorer.selectedPath)
         if (entry) {
           event.preventDefault()
@@ -166,6 +175,28 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  // Team task-queue events flow whatever panel is visible.
+  useEffect(() => {
+    return window.relaxcode.team.onEvent((event) => {
+      useTeamStore.getState().applyEvent(event as never)
+    })
+  }, [])
+
+  // Arena tournament events flow whatever panel is visible.
+  useEffect(() => {
+    return window.relaxcode.arena.onEvent((event) => {
+      useArenaStore.getState().applyEvent(event as never)
+    })
+  }, [])
+
+  // Tray menu items act inside the app: a new task or the settings screen.
+  useEffect(() => {
+    return window.relaxcode.tray.onCommand((command) => {
+      if (command === 'new-chat') useChatStore.getState().newChat()
+      if (command === 'open-settings') useUiStore.getState().openSettings()
+    })
+  }, [])
+
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useChatStore.getState().loadProcesses()
@@ -199,13 +230,14 @@ export default function App(): JSX.Element {
             </div>
           </main>
           <ChatPanel />
-          {screenOpen && <ScreenPanel />}
+          <ScreenPanel open={screenOpen} />
           {settingsOpen && <SettingsScreen />}
+          <ArenaScreen />
+          <TeamScreen />
           {usageOpen && <UsageScreen />}
         </div>
         <StatusBar />
       </div>
-      <Toaster />
     </TooltipProvider>
   )
 }

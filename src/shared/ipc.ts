@@ -8,6 +8,31 @@ export const IPC = {
   WINDOW_TOGGLE_MAXIMIZE: 'window:toggle-maximize',
   WINDOW_CLOSE: 'window:close',
   WINDOW_MAXIMIZED_CHANGED: 'window:maximized-changed',
+  /** A tray menu item: 'new-chat' or 'open-settings'. */
+  TRAY_COMMAND: 'tray:command',
+  /** Custom tray menu window → main: open, new-chat, open-settings, toggle-background, quit, dismiss. */
+  TRAY_MENU_ACTION: 'tray:menu-action',
+  /** Main → menu window: the checkbox state to render. */
+  TRAY_MENU_STATE: 'tray:menu-state',
+  ARENA_START: 'arena:start',
+  ARENA_PICK: 'arena:pick',
+  ARENA_CANCEL: 'arena:cancel',
+  ARENA_EVENT: 'arena:event',
+  ARENA_PREVIEW: 'arena:preview',
+  TEAM_GET: 'team:get',
+  TEAM_SAVE: 'team:save',
+  TEAM_TASK_ADD: 'team:task-add',
+  TEAM_TASK_STATUS: 'team:task-status',
+  TEAM_TASK_REMOVE: 'team:task-remove',
+  TEAM_ME_SET: 'team:me-set',
+  TEAM_ME_GET: 'team:me-get',
+  TEAM_COMMIT_PUSH: 'team:commit-push',
+  TEAM_PULL: 'team:pull',
+  TEAM_ROSTER_PUSH: 'team:roster-push',
+  TEAM_GITHUB_CREATE: 'team:github-create',
+  TEAM_GITHUB_CHECK: 'team:github-check',
+  TEAM_EVENT: 'team:event',
+  ARENA_PREVIEW_STOP: 'arena:preview-stop',
   WORKSPACE_OPEN_FOLDER: 'workspace:open-folder',
   WORKSPACE_OPEN_PATH: 'workspace:open-path',
   WORKSPACE_RECENT_LIST: 'workspace:recent-list',
@@ -232,6 +257,47 @@ export interface TerminalOutputEvent {
   done?: boolean
 }
 
+/* ------------------------------- arena -------------------------------- */
+
+/** Creativity preset of an arena contestant. */
+export type ArenaStyle = 'careful' | 'balanced' | 'bold'
+
+export interface ArenaContestant {
+  id: number
+  style: ArenaStyle
+  /** The connection and model this contestant runs on. */
+  providerId: string
+  model: string
+  temperature: number
+  /** How deeply this contestant is asked to reason. */
+  thinking: ThinkingLevel
+  /** 0 = follow the app settings for these knobs. */
+  topP: number
+  maxSteps: number
+  /** Personal instruction only this contestant sees. */
+  prompt: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  steps: number
+  files: number
+  tests: 'unknown' | 'pass' | 'fail' | 'skipped'
+  summary: string
+}
+
+export interface ArenaState {
+  id: string
+  task: string
+  status: 'running' | 'ready' | 'error'
+  activeId: number | null
+  contestants: ArenaContestant[]
+  /** The model's verdict after every contestant has finished. */
+  judge?: { status: 'running' | 'done' | 'failed'; winnerId: number | null; reason: string }
+  error?: string
+}
+
+export type ArenaEvent =
+  | { kind: 'state'; state: ArenaState }
+  | { kind: 'chat'; runId: string; event: ChatEvent }
+
 export interface ChatMessagePayload {
   role: ChatRole
   content: string
@@ -256,6 +322,25 @@ export interface ChatSendRequest {
    * still applies) within the hard limits from the agent settings.
    */
   night?: boolean
+  /**
+   * Arena override: this run speaks as another connection/model with its own
+   * sampling temperature. Only the arena orchestrator sends it.
+   */
+  arena?: {
+    providerId: string
+    model: string
+    temperature: number
+    thinking?: ThinkingLevel
+    /** 0 = keep the configured value. */
+    topP?: number
+    maxSteps?: number
+    prompt?: string
+  }
+  /**
+   * Team persona: this run acts as one team member (nick, specialty, level,
+   * duties). Only the team orchestrator sends it.
+   */
+  persona?: { nick: string; specialty: string; level: string; duties: string }
   /** A skill pinned with `#` in the composer; it beats the automatic choice. */
   skillId?: string
   context: {

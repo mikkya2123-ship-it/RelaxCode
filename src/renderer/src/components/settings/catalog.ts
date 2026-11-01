@@ -2,6 +2,15 @@ import type { TKey } from '@shared/i18n'
 import type { SettingsValues } from '@shared/settings'
 import { TERMINAL_SHELLS } from '@shared/terminal'
 import { FIGURE_THEMES } from '@shared/figures'
+import {
+  AUTO_CLOSE,
+  AUTO_INDENT,
+  CURSOR_CARET,
+  FOLDING_CONTROLS,
+  MATCH_BRACKETS,
+  MULTI_CURSOR,
+  OCCURRENCES
+} from '@shared/settings'
 
 /**
  * The settings screen is generated from this catalogue: one entry per row.
@@ -197,6 +206,36 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.agent.retryBaseSeconds.hint',
     control: { kind: 'number', min: 1, max: 120, step: 1, unit: 's' },
     keywords: 'задержка повторов пауза'
+  },
+  {
+    id: 'agent.presencePenalty',
+    section: 'agent',
+    group: 'agent',
+    key: 'presencePenalty',
+    label: 'settings.agent.presencePenalty',
+    hint: 'settings.agent.penalty.hint',
+    control: { kind: 'slider', min: -2, max: 2, step: 0.1 },
+    keywords: 'presence penalty повторение разнообразие'
+  },
+  {
+    id: 'agent.frequencyPenalty',
+    section: 'agent',
+    group: 'agent',
+    key: 'frequencyPenalty',
+    label: 'settings.agent.frequencyPenalty',
+    hint: 'settings.agent.penalty.hint',
+    control: { kind: 'slider', min: -2, max: 2, step: 0.1 },
+    keywords: 'frequency penalty повторение частота разнообразие'
+  },
+  {
+    id: 'agent.seed',
+    section: 'agent',
+    group: 'agent',
+    key: 'seed',
+    label: 'settings.agent.seed',
+    hint: 'settings.agent.seed.hint',
+    control: { kind: 'number', min: -1, max: 2147483646, step: 1 },
+    keywords: 'seed сид детерминированность воспроизводимость'
   },
   {
     id: 'agent.responseLanguage',
@@ -862,6 +901,189 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     control: { kind: 'number', min: 200, max: 60000, step: 100, unit: 'ms' },
     keywords: 'задержка автосохранения'
   },
+  {
+    id: 'editor.cursorSmoothCaret',
+    section: 'editor',
+    group: 'editor',
+    key: 'cursorSmoothCaret',
+    label: 'settings.editor.cursorSmoothCaret',
+    control: { kind: 'select', options: options('settings.editor.cursorSmoothCaret', CURSOR_CARET) },
+    keywords: 'плавный курсор caret animation'
+  },
+  {
+    id: 'editor.cursorWidth',
+    section: 'editor',
+    group: 'editor',
+    key: 'cursorWidth',
+    label: 'settings.editor.cursorWidth',
+    control: { kind: 'number', min: 1, max: 20, step: 1, unit: 'px' },
+    keywords: 'толщина курсора'
+  },
+  {
+    id: 'editor.folding',
+    section: 'editor',
+    group: 'editor',
+    key: 'folding',
+    label: 'settings.editor.folding',
+    control: { kind: 'switch' },
+    keywords: 'фолдинг сворачивание блоков folding'
+  },
+  {
+    id: 'editor.showFoldingControls',
+    section: 'editor',
+    group: 'editor',
+    key: 'showFoldingControls',
+    label: 'settings.editor.showFoldingControls',
+    control: {
+      kind: 'select',
+      options: options('settings.editor.showFoldingControls', FOLDING_CONTROLS)
+    },
+    keywords: 'кнопки фолдинга всегда при наведении'
+  },
+  {
+    id: 'editor.matchBrackets',
+    section: 'editor',
+    group: 'editor',
+    key: 'matchBrackets',
+    label: 'settings.editor.matchBrackets',
+    control: { kind: 'select', options: options('settings.editor.matchBrackets', MATCH_BRACKETS) },
+    keywords: 'парные скобки подсветка'
+  },
+  {
+    id: 'editor.occurrencesHighlight',
+    section: 'editor',
+    group: 'editor',
+    key: 'occurrencesHighlight',
+    label: 'settings.editor.occurrencesHighlight',
+    control: { kind: 'select', options: options('settings.editor.occurrencesHighlight', OCCURRENCES) },
+    keywords: 'вхождения подсветка слов occurrences'
+  },
+  {
+    id: 'editor.selectionHighlight',
+    section: 'editor',
+    group: 'editor',
+    key: 'selectionHighlight',
+    label: 'settings.editor.selectionHighlight',
+    control: { kind: 'switch' },
+    keywords: 'подсветка выделения selection'
+  },
+  {
+    id: 'editor.copyWithSyntaxHighlighting',
+    section: 'editor',
+    group: 'editor',
+    key: 'copyWithSyntaxHighlighting',
+    label: 'settings.editor.copyWithSyntaxHighlighting',
+    control: { kind: 'switch' },
+    keywords: 'копировать с подсветкой clipboard'
+  },
+  {
+    id: 'editor.multiCursorModifier',
+    section: 'editor',
+    group: 'editor',
+    key: 'multiCursorModifier',
+    label: 'settings.editor.multiCursorModifier',
+    control: { kind: 'select', options: options('settings.editor.multiCursorModifier', MULTI_CURSOR) },
+    keywords: 'мультикурсор клавиша alt ctrl добавить курсор'
+  },
+  {
+    id: 'editor.mouseWheelZoom',
+    section: 'editor',
+    group: 'editor',
+    key: 'mouseWheelZoom',
+    label: 'settings.editor.mouseWheelZoom',
+    control: { kind: 'switch' },
+    keywords: 'зум колесом мыши размер шрифта'
+  },
+  {
+    id: 'editor.linkedEditing',
+    section: 'editor',
+    group: 'editor',
+    key: 'linkedEditing',
+    label: 'settings.editor.linkedEditing',
+    control: { kind: 'switch' },
+    keywords: 'связанное редактирование html тег'
+  },
+  {
+    id: 'editor.autoClosingBrackets',
+    section: 'editor',
+    group: 'editor',
+    key: 'autoClosingBrackets',
+    label: 'settings.editor.autoClosingBrackets',
+    control: { kind: 'select', options: options('settings.editor.autoClosing', AUTO_CLOSE) },
+    keywords: 'автозакрытие скобок'
+  },
+  {
+    id: 'editor.autoClosingQuotes',
+    section: 'editor',
+    group: 'editor',
+    key: 'autoClosingQuotes',
+    label: 'settings.editor.autoClosingQuotes',
+    control: { kind: 'select', options: options('settings.editor.autoClosing', AUTO_CLOSE) },
+    keywords: 'автозакрытие кавычек'
+  },
+  {
+    id: 'editor.autoIndent',
+    section: 'editor',
+    group: 'editor',
+    key: 'autoIndent',
+    label: 'settings.editor.autoIndent',
+    control: { kind: 'select', options: options('settings.editor.autoIndent', AUTO_INDENT) },
+    keywords: 'автоотступ.indent'
+  },
+  {
+    id: 'editor.dragAndDrop',
+    section: 'editor',
+    group: 'editor',
+    key: 'dragAndDrop',
+    label: 'settings.editor.dragAndDrop',
+    control: { kind: 'switch' },
+    keywords: 'перетаскивание текста drag'
+  },
+  {
+    id: 'editor.emptySelectionClipboard',
+    section: 'editor',
+    group: 'editor',
+    key: 'emptySelectionClipboard',
+    label: 'settings.editor.emptySelectionClipboard',
+    control: { kind: 'switch' },
+    keywords: 'буфер обмена строка без выделения'
+  },
+  {
+    id: 'editor.formatOnPaste',
+    section: 'editor',
+    group: 'editor',
+    key: 'formatOnPaste',
+    label: 'settings.editor.formatOnPaste',
+    control: { kind: 'switch' },
+    keywords: 'форматировать при вставке отступы'
+  },
+  {
+    id: 'editor.overviewRulerBorder',
+    section: 'editor',
+    group: 'editor',
+    key: 'overviewRulerBorder',
+    label: 'settings.editor.overviewRulerBorder',
+    control: { kind: 'switch' },
+    keywords: 'граница мини-карты полоса справа'
+  },
+  {
+    id: 'editor.scrollbarSize',
+    section: 'editor',
+    group: 'editor',
+    key: 'scrollbarSize',
+    label: 'settings.editor.scrollbarSize',
+    control: { kind: 'number', min: 4, max: 24, step: 1, unit: 'px' },
+    keywords: 'толщина прокрутки скроллбар'
+  },
+  {
+    id: 'editor.highlightActiveIndentGuide',
+    section: 'editor',
+    group: 'editor',
+    key: 'highlightActiveIndentGuide',
+    label: 'settings.editor.highlightActiveIndentGuide',
+    control: { kind: 'switch' },
+    keywords: 'активный блок направляющая подсветка'
+  },
 
   // ------------------------------------------------------------------------- ui
   {
@@ -986,6 +1208,26 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     label: 'settings.ui.screenWidth',
     control: { kind: 'number', min: 280, max: 720, step: 8, unit: 'px' },
     keywords: 'ширина панели экрана'
+  },
+  {
+    id: 'ui.closeToTray',
+    section: 'ui',
+    group: 'ui',
+    key: 'closeToTray',
+    label: 'settings.ui.closeToTray',
+    hint: 'settings.ui.closeToTray.hint',
+    control: { kind: 'switch' },
+    keywords: 'трей фон закрытие сворачивание tray background запуск задач'
+  },
+  {
+    id: 'ui.liquidGlass',
+    section: 'ui',
+    group: 'ui',
+    key: 'liquidGlass',
+    label: 'settings.ui.liquidGlass',
+    hint: 'settings.ui.liquidGlass.hint',
+    control: { kind: 'switch' },
+    keywords: 'liquid glass стекло блик кнопки ios жидкое'
   },
   {
     id: 'ui.showTimestamps',

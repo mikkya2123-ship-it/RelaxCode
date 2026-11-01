@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type DragEvent,
@@ -7,6 +8,7 @@ import {
   type MouseEvent
 } from 'react'
 import {
+  ChevronsDownUp,
   ChevronRight,
   Copy,
   ExternalLink,
@@ -15,6 +17,7 @@ import {
   FolderOpen,
   FolderPlus,
   Pencil,
+  RefreshCw,
   Trash2
 } from 'lucide-react'
 import type { DirEntry } from '@shared/ipc'
@@ -43,6 +46,28 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+
+function ToolButton({
+  title,
+  onClick,
+  children
+}: {
+  title: string
+  onClick: () => void
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+    >
+      {children}
+    </button>
+  )
+}
 
 /* ------------------------------ inline editing ----------------------------- */
 
@@ -175,6 +200,9 @@ function ExplorerMenu({
   const duplicateEntry = useExplorerStore((s) => s.duplicateEntry)
 
   const entry = target?.entry ?? null
+  const multiSelected = useExplorerStore((st) => st.multiSelected)
+  const requestMultiDelete = useExplorerStore((st) => st.requestMultiDelete)
+  const batchDelete = entry !== null && multiSelected.includes(entry.path) && multiSelected.length > 1
   const isRoot = !entry || isSamePath(entry.path, root)
   const parent = entry ? (entry.isDirectory ? entry.path : parentDirOf(entry.path)) : root
   const relative = entry ? relativeTo(root, entry.path) : ''
@@ -238,17 +266,27 @@ function ExplorerMenu({
           {t('explorer.reveal')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={isRoot}
-          onSelect={() => requestDelete(entry)}
-          className="text-destructive data-[highlighted]:bg-destructive/10"
-        >
-          <Trash2 />
-          {t('explorer.delete')}
-          {keymap?.deleteEntry && (
-            <DropdownMenuShortcut>{keymap.deleteEntry}</DropdownMenuShortcut>
-          )}
-        </DropdownMenuItem>
+        {batchDelete ? (
+          <DropdownMenuItem
+            onSelect={() => requestMultiDelete(multiSelected)}
+            className="text-destructive data-[highlighted]:bg-destructive/10"
+          >
+            <Trash2 />
+            {t('explorer.deleteSelected', { n: multiSelected.length })}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem
+            disabled={isRoot}
+            onSelect={() => requestDelete(entry)}
+            className="text-destructive data-[highlighted]:bg-destructive/10"
+          >
+            <Trash2 />
+            {t('explorer.delete')}
+            {keymap?.deleteEntry && (
+              <DropdownMenuShortcut>{keymap.deleteEntry}</DropdownMenuShortcut>
+            )}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -266,6 +304,9 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
   const isOpen = useExplorerStore((s) => !!s.expanded[entry.path])
   const children = useExplorerStore((s) => s.childrenByDir[entry.path])
   const selected = useExplorerStore((s) => s.selectedPath === entry.path)
+  const multiSelected = useExplorerStore((s) => s.multiSelected.includes(entry.path))
+  const toggleMultiSelect = useExplorerStore((st) => st.toggleMultiSelect)
+  const clearMultiSelect = useExplorerStore((st) => st.clearMultiSelect)
   const inline = useExplorerStore((s) => s.inline)
   const dragging = useExplorerStore((s) => s.draggingPath)
   const draggingEntry = useExplorerStore((s) =>
@@ -291,11 +332,24 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
     !isSamePath(dragging, entry.path) &&
     !(draggingEntry?.isDirectory && isPathInside(dragging, entry.path))
 
-  const handleClick = (): void => {
-    select(entry)
-    if (!entry.isDirectory) {
-      void useEditorStore.getState().openFile(entry.path, entry.name)
+  // Windows semantics: one click only selects (a folder also expands), a
+  // double click opens the file. No accidental half-open editors while you
+  // are just picking your way through the tree.
+  const handleClick = (event: MouseEvent<HTMLButtonElement>): void => {
+    if (event.ctrlKey || event.metaKey) {
+      toggleMultiSelect(entry)
+      return
     }
+    clearMultiSelect()
+    select(entry)
+  }
+
+  const handleDoubleClick = (): void => {
+    if (entry.isDirectory) {
+      toggleDir(entry.path)
+      return
+    }
+    void useEditorStore.getState().openFile(entry.path, entry.name)
   }
 
   const handleChevronClick = (event: MouseEvent): void => {
@@ -327,10 +381,9 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
       ) : (
         <button
           type="button"
+          data-path={entry.path}
           onClick={handleClick}
-          onDoubleClick={() => {
-            if (entry.isDirectory) toggleDir(entry.path)
-          }}
+          onDoubleClick={handleDoubleClick}
           onContextMenu={(event) => onMenu(entry, event)}
           draggable
           onDragStart={handleDragStart}
@@ -346,7 +399,10 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
           className={cn(
             'group flex w-full items-center gap-2 rounded-md pr-1.5 text-left text-[13px] text-foreground/90 transition-colors duration-100',
             rowHeight,
-            selected ? 'bg-pressed text-foreground' : 'hover:bg-foreground/[0.05]',
+            selected || multiSelected
+              ? 'bg-pressed text-foreground'
+              : 'hover:bg-foreground/[0.05]',
+            multiSelected && !selected && 'ring-1 ring-inset ring-ring/40',
             over && 'bg-primary/[0.07] ring-1 ring-inset ring-ring/50'
           )}
           style={{ paddingLeft: depth * 12 + 4 }}
@@ -397,11 +453,46 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
 
 function DeleteDialog(): JSX.Element {
   const pending = useExplorerStore((s) => s.pendingDelete)
+  const pendingMulti = useExplorerStore((s) => s.pendingMultiDelete)
   const deleteError = useExplorerStore((s) => s.deleteError)
   const confirmDelete = useExplorerStore((s) => s.confirmDelete)
+  const confirmMultiDelete = useExplorerStore((s) => s.confirmMultiDelete)
   const cancelDelete = useExplorerStore((s) => s.cancelDelete)
   const useTrash = useSettingsStore((s) => s.settings?.files.useTrash ?? true)
   const t = useT()
+
+  if (pendingMulti !== null) {
+    return (
+      <Dialog
+        open
+        onOpenChange={(open) => {
+          if (!open) cancelDelete()
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('explorer.deleteMultiTitle', { n: pendingMulti.length })}</DialogTitle>
+            <DialogDescription>
+              {useTrash
+                ? t('explorer.deleteMultiToTrash', { n: pendingMulti.length })
+                : t('explorer.deleteMultiPermanently', { n: pendingMulti.length })}
+            </DialogDescription>
+            {deleteError && (
+              <p className="text-[12px] leading-relaxed text-destructive">{deleteError}</p>
+            )}
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="default" onClick={cancelDelete}>
+              {t('action.cancel')}
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmMultiDelete()}>
+              {t('explorer.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog
@@ -450,10 +541,108 @@ export function FileTree({ root }: FileTreeProps): JSX.Element {
   const dragging = useExplorerStore((s) => s.draggingPath)
   const moveEntry = useExplorerStore((s) => s.moveEntry)
   const setDragging = useExplorerStore((s) => s.setDragging)
+  const expanded = useExplorerStore((s) => s.expanded)
+  const childrenByDir = useExplorerStore((s) => s.childrenByDir)
+  const selectedPath = useExplorerStore((s) => s.selectedPath)
+  const toggleDir = useExplorerStore((s) => s.toggleDir)
+  const selectEntry = useExplorerStore((s) => s.select)
+  const beginCreate = useExplorerStore((s) => s.beginCreate)
+  const collapseAll = useExplorerStore((s) => s.collapseAll)
+  const refreshAll = useExplorerStore((s) => s.refreshAll)
+  const clearMultiSelect = useExplorerStore((s) => s.clearMultiSelect)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const [menu, setMenu] = useState<MenuTarget | null>(null)
   const [rootOver, setRootOver] = useState(false)
   const compact = useSettingsStore((s) => s.settings?.ui.density === 'compact')
   const t = useT()
+
+  /** The rows the user can see right now, top to bottom — for arrow keys. */
+  const flatRows = useMemo(() => {
+    const out: DirEntry[] = []
+    const walk = (dir: string): void => {
+      for (const entry of childrenByDir[dir] ?? []) {
+        out.push(entry)
+        if (entry.isDirectory && expanded[entry.path]) walk(entry.path)
+      }
+    }
+    walk(root)
+    return out
+  }, [childrenByDir, expanded, root])
+
+  // Keyboard selection scrolls the row into view.
+  useEffect(() => {
+    if (!selectedPath) return
+    const row = containerRef.current?.querySelector(`[data-path="${CSS.escape(selectedPath)}"]`)
+    row?.scrollIntoView({ block: 'nearest' })
+  }, [selectedPath])
+
+  const moveSelection = (offset: number): void => {
+    if (flatRows.length === 0) return
+    const idx = flatRows.findIndex((entry) => entry.path === selectedPath)
+    const next = idx === -1 ? (offset > 0 ? 0 : flatRows.length - 1) : Math.min(flatRows.length - 1, Math.max(0, idx + offset))
+    clearMultiSelect()
+    selectEntry(flatRows[next])
+  }
+
+  const handleTreeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (inline) return // typing in a name must not move the selection
+    const current = flatRows.find((entry) => entry.path === selectedPath) ?? null
+    if (event.ctrlKey && (event.key === 'a' || event.key === 'A')) {
+      event.preventDefault()
+      useExplorerStore.setState({ multiSelected: flatRows.filter((entry) => !isSamePath(entry.path, root)).map((entry) => entry.path) })
+      return
+    }
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        moveSelection(1)
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        moveSelection(-1)
+        break
+      case 'ArrowRight':
+        event.preventDefault()
+        if (current?.isDirectory) {
+          if (!expanded[current.path]) toggleDir(current.path)
+          else {
+            const first = (childrenByDir[current.path] ?? [])[0]
+            if (first) {
+              clearMultiSelect()
+              selectEntry(first)
+            }
+          }
+        }
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        if (current?.isDirectory && expanded[current.path]) toggleDir(current.path)
+        break
+      case 'Enter':
+        event.preventDefault()
+        if (current) {
+          if (current.isDirectory) toggleDir(current.path)
+          else void useEditorStore.getState().openFile(current.path, current.name)
+        }
+        break
+      case 'Home':
+        event.preventDefault()
+        if (flatRows[0]) {
+          clearMultiSelect()
+          selectEntry(flatRows[0])
+        }
+        break
+      case 'End':
+        event.preventDefault()
+        if (flatRows.length > 0) {
+          clearMultiSelect()
+          selectEntry(flatRows[flatRows.length - 1])
+        }
+        break
+      default:
+        break
+    }
+  }
 
   const rootInline = inline?.kind === 'create' && isSamePath(inline.parentPath, root)
 
@@ -493,12 +682,31 @@ export function FileTree({ root }: FileTreeProps): JSX.Element {
   }
 
   return (
-    <div
-      className={cn(
-        'flex min-h-full flex-col px-2 pb-3',
-        rootOver && 'bg-primary/[0.03] ring-1 ring-inset ring-ring/40'
-      )}
-      onContextMenu={openRootMenu}
+    <div className="flex flex-col">
+      {/* The Windows-style strip: the everyday actions, one click away. */}
+      <div className="flex items-center gap-0.5 border-b border-border px-2 py-1">
+        <ToolButton title={t('explorer.newFile')} onClick={() => beginCreate('file')}>
+          <FilePlus className="size-4" />
+        </ToolButton>
+        <ToolButton title={t('explorer.newFolder')} onClick={() => beginCreate('dir')}>
+          <FolderPlus className="size-4" />
+        </ToolButton>
+        <ToolButton title={t('explorer.refresh')} onClick={() => void refreshAll()}>
+          <RefreshCw className="size-4" />
+        </ToolButton>
+        <ToolButton title={t('explorer.collapseAll')} onClick={() => collapseAll()}>
+          <ChevronsDownUp className="size-4" />
+        </ToolButton>
+      </div>
+      <div
+        ref={containerRef}
+        tabIndex={0}
+        onKeyDown={handleTreeKeyDown}
+        className={cn(
+          'flex min-h-full flex-1 flex-col px-2 pb-3 outline-none',
+          rootOver && 'bg-primary/[0.03] ring-1 ring-inset ring-ring/40'
+        )}
+        onContextMenu={openRootMenu}
       onDragOver={(event) => {
         if (!dragging) return
         event.preventDefault()
@@ -528,6 +736,7 @@ export function FileTree({ root }: FileTreeProps): JSX.Element {
 
       <ExplorerMenu target={menu} root={root} onClose={() => setMenu(null)} />
       <DeleteDialog />
+      </div>
     </div>
   )
 }

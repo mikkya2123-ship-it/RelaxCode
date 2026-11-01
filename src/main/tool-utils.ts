@@ -85,7 +85,38 @@ export const NO_WORKSPACE =
 
 export function resolveInWorkspace(input: string): string {
   if (!getWorkspaceRoot()) throw new ToolError(NO_WORKSPACE)
-  return assertInsideWorkspace(input)
+  const resolved = assertInsideWorkspace(input)
+  // Team mode: a specialist may only touch paths inside their assigned scope.
+  if (fileScope) {
+    const rel = relative(getWorkspaceRoot() as string, resolved).split(sep).join('/')
+    const allowed =
+      fileScope.includes('**') ||
+      fileScope.some(
+        (prefix) => rel === prefix || rel.startsWith(prefix.replace(/\/+$/, '') + '/')
+      )
+    if (!allowed) {
+      throw new ToolError(
+        `Outside your specialty scope (${fileScope.join(', ')}): as a team member you may only work in your assigned area. Leave this path to a teammate.`
+      )
+    }
+  }
+  return resolved
+}
+
+/**
+ * Team mode file scope: path prefixes the current specialist may modify.
+ * null = unrestricted. Set by the team orchestrator around each member's run.
+ */
+let fileScope: string[] | null = null
+let fileScopeOwner = ''
+
+export function setAgentFileScope(paths: string[] | null, owner = ''): void {
+  fileScope = paths
+  fileScopeOwner = owner
+}
+
+export function agentFileScope(): { paths: string[] | null; owner: string } {
+  return { paths: fileScope, owner: fileScopeOwner }
 }
 
 export function relPath(absolute: string): string {

@@ -33,6 +33,7 @@ export function applyAppearance(settings: PublicSettings): 'light' | 'dark' {
   root.classList.toggle('dark', dark)
   root.classList.toggle('no-animations', !settings.ui.animations)
   root.classList.toggle('density-compact', settings.ui.density === 'compact')
+  root.classList.toggle('liquid-glass', settings.ui.liquidGlass)
   root.style.fontSize = `${Math.round(settings.ui.scale * 100)}%`
 
   const accent = settings.ui.accent

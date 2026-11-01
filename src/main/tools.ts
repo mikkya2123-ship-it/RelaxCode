@@ -350,33 +350,46 @@ const deletePathTool: ToolDef = {
     const stat = await fs.stat(target).catch(() => null)
     if (!stat) throw new ToolError(`Path not found: ${relPath(target)}`)
     const toTrash = cfg().files.useTrash
-    if (stat.isDirectory()) {
-      const entries = await fs.readdir(target)
-      if (entries.length > 0 && !argBool(args, 'recursive')) {
-        throw new ToolError('Directory is not empty; set recursive=true to delete it')
-      }
+
+    /**
+     * Trash first (recoverable), but the Windows recycle bin refuses busy
+     * files, long paths and some drives — then a hard delete with retries
+     * takes over, so the agent's delete actually happens every time.
+     */
+    const remove = async (): Promise<'trash' | 'removed'> => {
       if (toTrash) {
-        await shell.trashItem(target)
-      } else {
-        await fs.rm(target, { recursive: true, force: true })
+        try {
+          await Promise.race([
+            shell.trashItem(target),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('trash-timeout')), 30000))
+          ])
+          return 'trash'
+        } catch {
+          // Fall through to the hard delete below.
+        }
       }
+      if (stat.isDirectory()) {
+        await fs.rm(target, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
+      } else {
+        await fs.rm(target, { force: true, maxRetries: 3, retryDelay: 200 })
+      }
+      return 'removed'
+    }
+    const mode = await remove()
+
+    if (stat.isDirectory()) {
       mirrorAgentFileEvent('file-delete', `${relPath(target)}/`)
       return {
         ok: true,
-        summary: `deleted directory ${relPath(target)}${toTrash ? ' (moved to trash)' : ''}`,
-        detail: toTrash ? 'Directory moved to the trash.' : 'Directory removed.'
+        summary: `deleted directory ${relPath(target)}${mode === 'trash' ? ' (moved to trash)' : ' (removed permanently)'}`,
+        detail: mode === 'trash' ? 'Directory moved to the trash.' : 'Directory removed.'
       }
-    }
-    if (toTrash) {
-      await shell.trashItem(target)
-    } else {
-      await fs.unlink(target)
     }
     mirrorAgentFileEvent('file-delete', relPath(target))
     return {
       ok: true,
-      summary: `deleted ${relPath(target)}${toTrash ? ' (moved to trash)' : ''}`,
-      detail: toTrash ? 'File moved to the trash.' : 'File removed.'
+      summary: `deleted ${relPath(target)}${mode === 'trash' ? ' (moved to trash)' : ' (removed permanently)'}`,
+      detail: mode === 'trash' ? 'File moved to the trash.' : 'File removed.'
     }
   }
 }

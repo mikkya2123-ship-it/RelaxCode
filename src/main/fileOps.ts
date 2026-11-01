@@ -231,10 +231,18 @@ export function createFileOps(deps: FileOpsDeps): FileOps {
       try {
         if (!(await entryExists(source))) return fail('not-found')
         if (deps.useTrash()) {
-          await deps.trash(source)
-        } else {
-          await fs.rm(source, { recursive: true, force: false })
+          try {
+            await Promise.race([
+              deps.trash(source),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('trash-timeout')), 30000))
+            ])
+            return { ok: true }
+          } catch {
+            // The recycle bin refused (busy file, long path, odd drive):
+            // a hard delete takes over so the action still succeeds.
+          }
         }
+        await fs.rm(source, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
         return { ok: true }
       } catch (error) {
         return failureFromError(error)

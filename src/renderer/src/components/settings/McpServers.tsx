@@ -1,6 +1,5 @@
 import { useEffect, useState, type JSX } from 'react'
 import {
-  Box,
   ChevronDown,
   ChevronRight,
   Download,
@@ -25,11 +24,13 @@ import {
   type McpServerState
 } from '@shared/mcp'
 import { useT } from '@/lib/i18n'
+import { useExplorerStore } from '@/stores/explorer'
 import { toast } from '@/stores/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import { McpAppIcon } from '@/components/ui/mcp-app-icon'
 import { SelectInput } from './controls'
 
 /**
@@ -69,6 +70,117 @@ function emptyDraft(): McpServerConfig {
     timeoutMs: 60000
   }
 }
+
+/**
+ * One-click presets for the well-known MCP servers. npx presets need
+ * Node.js on the machine; uvx presets need the Python uv runner. The user
+ * still reviews the exact command in the editor before trusting it.
+ */
+interface McpPreset {
+  key: string
+  appName: string
+  label: string
+  description: string
+  needsUv?: boolean
+  build: (workspace: string) => McpServerConfig
+}
+
+const MCP_PRESETS: McpPreset[] = [
+  {
+    key: 'filesystem',
+    appName: 'vscode',
+    label: 'Filesystem',
+    description: 'Чтение, поиск и запись файлов в рабочей папке (официальный сервер)',
+    build: (workspace) => ({
+      ...emptyDraft(),
+      name: 'filesystem',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem', workspace || '.'],
+      defaultRisk: 'write'
+    })
+  },
+  {
+    key: 'memory',
+    appName: 'notion',
+    label: 'Memory',
+    description: 'Долговременная память агента между чатами (граф знаний)',
+    build: () => ({
+      ...emptyDraft(),
+      name: 'memory',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-memory'],
+      defaultRisk: 'read'
+    })
+  },
+  {
+    key: 'sequential-thinking',
+    appName: 'unity',
+    label: 'Sequential Thinking',
+    description: 'Пошаговое структурированное рассуждение для сложных задач',
+    build: () => ({
+      ...emptyDraft(),
+      name: 'sequential-thinking',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
+      defaultRisk: 'read'
+    })
+  },
+  {
+    key: 'puppeteer',
+    appName: 'chrome',
+    label: 'Puppeteer',
+    description: 'Браузер: открывать страницы, кликать, снимать скриншоты',
+    build: () => ({
+      ...emptyDraft(),
+      name: 'puppeteer',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-puppeteer'],
+      defaultRisk: 'exec'
+    })
+  },
+  {
+    key: 'git',
+    appName: 'unity',
+    label: 'Git',
+    description: 'История, диффы и коммиты репозитория (нужен Python + uv)',
+    needsUv: true,
+    build: () => ({
+      ...emptyDraft(),
+      name: 'git',
+      command: 'uvx',
+      args: ['mcp-server-git'],
+      defaultRisk: 'write'
+    })
+  },
+  {
+    key: 'fetch',
+    appName: 'chrome',
+    label: 'Fetch',
+    description: 'Загрузка веб-страниц и API в контекст (нужен Python + uv)',
+    needsUv: true,
+    build: () => ({
+      ...emptyDraft(),
+      name: 'fetch',
+      command: 'uvx',
+      args: ['mcp-server-fetch'],
+      defaultRisk: 'read'
+    })
+  },
+  {
+    key: 'time',
+    appName: 'godot',
+    label: 'Time',
+    description: 'Текущее время и часовые пояса (нужен Python + uv)',
+    needsUv: true,
+    build: () => ({
+      ...emptyDraft(),
+      name: 'time',
+      command: 'uvx',
+      args: ['mcp-server-time'],
+      defaultRisk: 'read'
+    })
+  }
+]
 
 function linesToArgs(text: string): string[] {
   return text
@@ -112,6 +224,7 @@ export function McpServersControl(): JSX.Element {
   const t = useT()
   const [states, setStates] = useState<McpServerState[] | null>(null)
   const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [presetDraft, setPresetDraft] = useState<McpServerConfig | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [importDraft, setImportDraft] = useState('')
 
@@ -217,7 +330,7 @@ export function McpServersControl(): JSX.Element {
         </p>
       )}
 
-      <BlenderWizard />
+      <AppConnectorsWizard />
 
       {states?.map((state) =>
         editing === state.config.name ? null : (
@@ -231,17 +344,56 @@ export function McpServersControl(): JSX.Element {
         )
       )}
 
+      {editing === 'new' && (
+        <div className="mb-3 rounded-lg border border-border p-3" data-testid="mcp-presets">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('settings.mcp.presets.title')}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {MCP_PRESETS.filter(
+              (preset) => !(states ?? []).some((s) => s.config.name === preset.build('').name)
+            ).map((preset) => (
+              <button
+                key={preset.key}
+                type="button"
+                className="flex items-start gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:border-ring/60"
+                onClick={() => {
+                  const workspace = useExplorerStore.getState().rootPath || ''
+                  setPresetDraft(preset.build(workspace))
+                }}
+              >
+                <McpAppIcon name={preset.appName} className="mt-0.5 size-7" />
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] font-medium">
+                    {preset.label}
+                    {preset.needsUv && <span className="ml-1.5 text-[10px] text-tertiary">uv</span>}
+                  </span>
+                  <span className="block text-[11px] leading-snug text-muted-foreground">
+                    {preset.description}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {editing !== null && (
         <McpServerEditor
-          draft={editing === 'new' ? emptyDraft() : (states?.find((s) => s.config.name === editing)?.config ?? emptyDraft())}
+          key={presetDraft ? `preset-${presetDraft.name}` : 'plain'}
+          draft={editing === 'new' ? (presetDraft ?? emptyDraft()) : (states?.find((s) => s.config.name === editing)?.config ?? emptyDraft())}
           isNew={editing === 'new'}
           takenNames={(states ?? []).map((s) => s.config.name).filter((name) => name !== editing)}
-          onCancel={() => setEditing(null)}
+          onCancel={() => {
+            setEditing(null)
+            setPresetDraft(null)
+          }}
           onSave={async (config) => {
             const result = await window.relaxcode.mcp.save(config)
             if (result.ok) {
               setStates(result.states)
               setEditing(null)
+              setPresetDraft(null)
               toast(t('settings.mcp.saved'))
             } else {
               toast(t('settings.saveFailed'), t(`settings.mcp.error.${result.error}` as never), 'error')
@@ -254,18 +406,36 @@ export function McpServersControl(): JSX.Element {
 }
 
 /** One-click setup for the reference connector: detect Blender, install the runtime and the addon. */
-function BlenderWizard(): JSX.Element {
+type ConnectorApp = 'blender' | 'godot'
+
+const CONNECTORS: Array<{ app: ConnectorApp; label: string }> = [
+  { app: 'blender', label: 'Blender' },
+  { app: 'godot', label: 'Godot' }
+]
+
+/** The connect-a-desktop-app wizard: detect installed apps, register, launch. */
+function AppConnectorsWizard(): JSX.Element {
   const t = useT()
   const [open, setOpen] = useState(false)
-  const [apps, setApps] = useState<McpDetectedApp[] | null>(null)
+  const [app, setApp] = useState<ConnectorApp>('blender')
+  const [appsByApp, setAppsByApp] = useState<Partial<Record<ConnectorApp, McpDetectedApp[]>>>({})
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
+  const [doneByApp, setDoneByApp] = useState<Partial<Record<ConnectorApp, boolean>>>({})
   const [lines, setLines] = useState<string[]>([])
+  const [godotPath, setGodotPath] = useState('')
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const appLabel = CONNECTORS.find((entry) => entry.app === app)?.label ?? app
+
+  const apps = appsByApp[app] ?? null
+  const done = doneByApp[app] ?? false
 
   useEffect(() => {
     if (!open || apps !== null) return
-    void window.relaxcode.mcp.detect('blender').then(setApps)
-  }, [open, apps])
+    void window.relaxcode.mcp.detect(app).then((list) => {
+      setAppsByApp((prev) => ({ ...prev, [app]: list }))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, app, apps])
 
   useEffect(
     () =>
@@ -279,31 +449,41 @@ function BlenderWizard(): JSX.Element {
 
   const setup = async (): Promise<void> => {
     setBusy(true)
-    setDone(false)
+    setDoneByApp((prev) => ({ ...prev, [app]: false }))
+    setSetupError(null)
     try {
-      const result = await window.relaxcode.mcp.setup('blender')
-      // Setup errors are human sentences from the connector, not i18n keys.
-      if (result.ok) setDone(true)
-      else toast(t('settings.mcp.setupFailed'), result.error ?? '', 'error')
+      const result = await window.relaxcode.mcp.setup(app, app === 'godot' ? godotPath || undefined : undefined)
+      // Setup errors are human sentences from the connector, not i18n keys —
+      // and toasts are off, so the failure renders right here.
+      if (result.ok) setDoneByApp((prev) => ({ ...prev, [app]: true }))
+      else setSetupError(result.error ?? t('settings.mcp.setupFailed'))
+    } catch (error) {
+      setSetupError(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
   }
 
   const launch = async (exePath: string): Promise<void> => {
-    const result = await window.relaxcode.mcp.launch('blender', exePath)
+    const result = await window.relaxcode.mcp.launch(app, exePath)
     if (!result.ok) toast(t('settings.mcp.launchFailed'), result.error ?? '', 'error')
   }
 
   return (
-    <div className="rounded-lg border border-border bg-accent/20 p-3" data-testid="mcp-blender-wizard">
+    <div className="rounded-lg border border-border bg-accent/20 p-3" data-testid="mcp-connectors-wizard">
       <button
         type="button"
         className="flex w-full items-center gap-2 text-left"
         onClick={() => setOpen((value) => !value)}
       >
-        <Box className="size-4 text-foreground/85" />
-        <span className="text-[13px] font-medium">{t('settings.mcp.wizard.title')}</span>
+        <span className="flex -space-x-1.5">
+          {CONNECTORS.map((entry) => (
+            <McpAppIcon key={entry.app} name={entry.app} className="size-7 ring-2 ring-card rounded-[5px]" />
+          ))}
+        </span>
+        <span className="text-[13px] font-medium">
+          {t('settings.mcp.wizard.titleApp', { app: appLabel })}
+        </span>
         <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
           {t('settings.mcp.wizard.toggle')}
           {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
@@ -312,17 +492,50 @@ function BlenderWizard(): JSX.Element {
 
       {open && (
         <div className="mt-2.5 space-y-2">
-          {apps === null && <p className="text-[11px] text-muted-foreground">{t('settings.mcp.wizard.detecting')}</p>}
+          <div className="flex items-center gap-1.5">
+            {CONNECTORS.map((entry) => (
+              <button
+                key={entry.app}
+                type="button"
+                onClick={() => setApp(entry.app)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors',
+                  entry.app === app
+                    ? 'border-ring/60 bg-card text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <McpAppIcon name={entry.app} className="size-5" />
+                {entry.label}
+              </button>
+            ))}
+          </div>
+
+          {apps === null && <p className="text-[11px] text-muted-foreground">{t('settings.mcp.wizard.detectingApp', { app: appLabel })}</p>}
           {apps !== null && apps.length === 0 && (
-            <p className="text-[11px] text-muted-foreground">{t('settings.mcp.wizard.notFound')}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {t('settings.mcp.wizard.notFoundApp', { app: appLabel })}
+            </p>
+          )}
+          {app === 'godot' && (
+            <div className="flex items-center gap-2">
+              <input
+                value={godotPath}
+                onChange={(event) => setGodotPath(event.target.value)}
+                placeholder={t('settings.mcp.wizard.godotPath')}
+                className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-[11px] font-mono"
+              />
+            </div>
           )}
           {apps?.map((item) => (
             <div key={item.exePath} className="flex items-center gap-2">
               <span className="text-[12px] font-medium">{item.label}</span>
-              {item.addonInstalled ? (
-                <span className="text-[10px] text-emerald-500">{t('settings.mcp.wizard.addonYes')}</span>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">{t('settings.mcp.wizard.addonNo')}</span>
+              {app === 'blender' && (
+                item.addonInstalled ? (
+                  <span className="text-[10px] text-emerald-500">{t('settings.mcp.wizard.addonYes')}</span>
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">{t('settings.mcp.wizard.addonNo')}</span>
+                )
               )}
               <code className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground" title={item.exePath}>
                 {item.exePath}
@@ -353,12 +566,20 @@ function BlenderWizard(): JSX.Element {
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Rocket className="size-3.5" />}
               {busy ? t('settings.mcp.wizard.installing') : t('settings.mcp.wizard.install')}
             </Button>
-            <span className="text-[10px] text-muted-foreground">{t('settings.mcp.wizard.installHint')}</span>
+            <span className="text-[10px] text-muted-foreground">
+              {app === 'godot' ? t('settings.mcp.wizard.godotHint') : t('settings.mcp.wizard.installHint')}
+            </span>
           </div>
 
           {done && (
             <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-[11px] text-foreground">
               {t('settings.mcp.wizard.done')}
+            </p>
+          )}
+
+          {setupError && (
+            <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-[11px] leading-snug text-destructive">
+              {setupError}
             </p>
           )}
 
@@ -419,7 +640,8 @@ function McpServerCard({ state, onConnect, onEdit, onRemove }: McpServerCardProp
 
   return (
     <div className="rounded-lg border border-border p-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
+        <McpAppIcon name={config.name} className="size-9" />
         <span className={cn('size-2 shrink-0 rounded-full', {
           'bg-emerald-500': state.status === 'ready',
           'bg-amber-500 animate-pulse': state.status === 'starting',
@@ -569,9 +791,10 @@ function McpServerCard({ state, onConnect, onEdit, onRemove }: McpServerCardProp
                 <span className="min-w-0 flex-1 truncate font-mono text-[11px]" title={tool.description}>
                   {tool.tool}
                 </span>
-                <div className="w-[120px]">
+                <div className="w-[150px] shrink-0">
                   <SelectInput
                     value={tool.risk}
+                    className="h-7 w-full text-[11px]"
                     options={MCP_RISKS.map((risk) => ({ value: risk, label: RISK_LABELS[risk] as never }))}
                     onChange={(next) => setToolRisk(tool.tool, next)}
                   />

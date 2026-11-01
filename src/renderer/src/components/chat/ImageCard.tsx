@@ -3,7 +3,6 @@ import { Download, Maximize2, X } from 'lucide-react'
 import type { ImageMeta } from '@shared/tool-meta'
 import { useT } from '@/lib/i18n'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
 
 /** Bytes → the shortest honest label ("240 KB", "1.4 MB"). */
 function bytesLabel(bytes: number): string {
@@ -110,27 +109,23 @@ export function ImageCard({ meta }: { meta: ImageMeta }): JSX.Element {
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-[94vw] border-border/60 bg-black/90 p-2 sm:rounded-2xl [&>button]:hidden">
+        <DialogContent overlayClassName="bg-black/85" className="w-auto max-w-[94vw] border-0 bg-transparent p-2 shadow-none [&>button]:hidden">
           <DialogTitle className="sr-only">{meta.alt || meta.caption || 'image'}</DialogTitle>
-          <div className="relative">
+          <div className="relative inline-flex max-w-[94vw] flex-col">
             <img
               src={meta.src}
               alt={meta.alt}
-              className="mx-auto max-h-[82vh] w-auto max-w-full rounded-lg object-contain"
+              className="max-h-[82vh] w-auto max-w-full rounded-lg object-contain"
             />
-            <div className="absolute right-1 top-1 flex gap-1.5">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label={t('chat.image.collapse')}
-                className={cn(
-                  'rounded-md border border-white/10 bg-black/50 p-1.5 text-white/70 backdrop-blur transition-colors hover:text-white'
-                )}
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <div className="mt-2 flex items-center gap-2 px-1 pb-1 text-[11px] text-white/60">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label={t('chat.image.collapse')}
+              className="absolute -right-3 -top-3 rounded-full border border-white/20 bg-black/80 p-1.5 text-white/80 shadow-lg transition-colors hover:text-white"
+            >
+              <X className="size-4" />
+            </button>
+            <div className="flex items-center gap-2 px-1 pt-2 text-[11px] text-white/60">
               {meta.caption && (
                 <span className="min-w-0 flex-1 truncate text-white/80" title={meta.caption}>
                   {meta.caption}

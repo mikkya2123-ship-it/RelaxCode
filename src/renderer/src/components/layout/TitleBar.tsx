@@ -1,11 +1,13 @@
 import { useEffect, useState, type JSX, type ReactNode } from 'react'
-import { Copy, MessageSquare, Minus, Monitor, PanelLeft, Settings, Square, X } from 'lucide-react'
+import {CircleHelp, Copy, MessageSquare, Minus, Monitor, PanelLeft, Settings, Square, X, Users, Lock } from 'lucide-react'
 import { useUiStore } from '@/stores/ui'
 import { useT } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { AppLogo } from '@/components/ui/app-logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, basename } from '@/lib/utils'
+import { useTeamStore } from '@/stores/team'
+import { FeedbackDialog } from '@/components/layout/FeedbackDialog'
 
 function WindowControlButton({
   label,
@@ -49,12 +51,13 @@ export function TitleBar(): JSX.Element {
   const openSettings = useUiStore((s) => s.openSettings)
   const workspace = useUiStore((s) => s.workspace)
   const [maximized, setMaximized] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const t = useT()
 
   useEffect(() => window.relaxcode.window.onMaximizedChanged(setMaximized), [])
 
   return (
-    <header className="drag flex h-10 shrink-0 select-none items-center justify-between bg-background pl-1.5 pr-1">
+    <header className="no-glass drag flex h-10 shrink-0 select-none items-center justify-between bg-background pl-1.5 pr-1">
       <div className="flex min-w-0 items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
@@ -91,6 +94,21 @@ export function TitleBar(): JSX.Element {
             <Button
               variant="ghost"
               size="icon-sm"
+              onClick={() => setFeedbackOpen(true)}
+              aria-label={t('feedback.title')}
+              className="no-drag text-muted-foreground"
+            >
+              <CircleHelp className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{t('feedback.title')}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={toggleChat}
               aria-label={t('titlebar.toggleChat')}
               className={cn('no-drag text-muted-foreground', chatOpen && 'bg-pressed text-foreground')}
@@ -99,6 +117,26 @@ export function TitleBar(): JSX.Element {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{t('titlebar.toggleChat')}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={useTeamStore.getState().openTeam}
+              aria-label={t('team.title')}
+              className="no-drag text-muted-foreground"
+            >
+              <span className="relative inline-flex" data-testid="team-locked-badge">
+                <Users className="size-4" />
+                <Lock className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-background bg-card p-px text-tertiary" />
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t('team.title')} — {t('team.soon.badge')}
+          </TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -154,6 +192,8 @@ export function TitleBar(): JSX.Element {
           </WindowControlButton>
         </div>
       </div>
+
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </header>
   )
 }

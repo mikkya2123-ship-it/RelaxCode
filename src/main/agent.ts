@@ -31,8 +31,9 @@ import { selectSkill } from '@shared/skill-select'
 import { effectiveSkills, type Skill } from '@shared/skills'
 import { shellSummary } from './terminal'
 import { trimForWire } from './token-saving'
-import { activeProvider, getApiKey, getSettings, type AppSettings } from './store'
+import { activeProvider, getApiKey, getSettings, providerById, type AppSettings } from './store'
 import { getWorkspaceRoot } from './workspace'
+import { teamAssistContext, applyMyScope } from './team'
 import { listBackground } from './proc'
 import {
   reasoningDeltaText,
@@ -66,6 +67,12 @@ import { captureJpeg } from './capture'
 /** Text that reads like the model claims it changed files (used to warn when nothing ran). */
 const CLAIMS_WORK_RE =
   /(созда|сдела|напиш|запиш|измен|исправ|добав|удали|обнови|реализ|writ|creat|edit|updat|fix|add|implement|generat|build|файл|file|проект|project|сайт|site)/i
+
+/** The user actually asked for work to be done (greetings must not trigger
+    the "no tools were called" warning — a reply that merely offers help does
+    contain verbs like 'create' and would otherwise false-positive). */
+const WORK_REQUEST_RE =
+  /(сдела|созда|напиши|добав|исправ|удали|перепиши|почин|реализ|отрефактор|рефактор|сверстай|построй|build|create|add |fix|delete|implement|refactor|write|make me|generate)/i
 
 /** Text that reads like the model claims the job succeeded (used when a tool failed). */
 const CLAIMS_SUCCESS_RE =
@@ -126,6 +133,11 @@ function refusalKey(baseUrl: string, model: string, param: DroppableParam): stri
 
 export function abortChat(): void {
   activeAbort?.abort()
+}
+
+/** True while an agent run owns the global single-run state. */
+export function agentBusy(): boolean {
+  return activeRun !== null
 }
 
 export function clearSessionApprovals(): void {
@@ -248,13 +260,28 @@ async function buildSystemPrompt(
   mode: ChatMode,
   request: ChatSendRequest,
   settings: AppSettings,
-  skill: Skill | null
+  skill: Skill | null,
+  skillCatalog: Skill[] = []
 ): Promise<string> {
+  const persona = request.persona
   const root = getWorkspaceRoot()
   const agent = settings.agent
   const availableToolNames = toolsForMode(mode).map((tool) => tool.name)
   const parts: string[] = []
 
+  if (persona) {
+    parts.push(
+      [
+        `=== TEAM PERSONA ===`,
+        `You are "${persona.nick}" — a ${persona.level} ${persona.specialty} on the development team.`,
+        'You act strictly within your role and your assigned file scope; work other team members are responsible for is not yours.',
+        persona.duties ? `Your assigned duties: ${persona.duties}` : '',
+        `=== END TEAM PERSONA ===`
+      ]
+        .filter(Boolean)
+        .join('\n')
+    )
+  }
   parts.push(
     'You are RelaxCode, an AI software engineering agent working inside a desktop IDE with a file tree, editor and terminal.'
   )
@@ -287,6 +314,12 @@ async function buildSystemPrompt(
     const notes = projectNotesDigest()
     if (notes) parts.push(notes)
 
+    // Friendly Development team: the assistant knows who it helps, their
+    // role and their open tasks on the board.
+    applyMyScope()
+    const teamContext = teamAssistContext()
+    if (teamContext) parts.push(teamContext)
+
     // The previous run left an unfinished task list: hand it over, so a long
     // job (a scene build, a refactor) continues instead of restarting blind.
     const previousTodos = (request.context.previousTodos ?? []).filter(
@@ -310,7 +343,19 @@ async function buildSystemPrompt(
 
   // One craft playbook for this task, chosen from the request. The chat shows
   // which skill was picked; the answer itself stays about the user's work.
-  if (skill) {
+  if (skillCatalog.length > 0 && mode !== 'chat') {
+    // The model picks the playbook itself: a compact catalog of ids and
+    // one-line descriptions, loaded with the use_skill tool on demand.
+    const catalog = skillCatalog
+      .map((entry) => `- ${entry.id}: ${entry.summaryEn}`)
+      .join('\n')
+    parts.push(
+      `Skill playbooks are available for this task domain. Catalog:
+${catalog}
+`+
+      'If the task clearly belongs to one of these domains, call the use_skill tool with its id as your FIRST action before writing any code, then follow the returned playbook rules. Pick at most one skill per task; skip the tool when nothing fits.'
+    )
+  } else if (skill) {
     parts.push(
       `Skill in force: "${skill.titleEn}". It sets the standard for everything you produce in this task — apply every rule below. Never mention the skill or these rules in your answer.\n${skill.rules
         .map((rule) => `- ${rule}`)
@@ -723,8 +768,23 @@ export async function runAgent(
     exchange.record(event)
     send(event)
   }
-  const settings = getSettings()
-  const provider = activeProvider(settings)
+  // An arena run speaks as another connection/model with its own temperature;
+  // everything else (limits, saving, key handling) stays as configured.
+  const arena = request.arena
+  const base = getSettings()
+  const settings = arena
+    ? {
+        ...base,
+        agent: {
+          ...base.agent,
+          temperature: arena.temperature,
+          topP: arena.topP ? arena.topP : base.agent.topP,
+          maxSteps: arena.maxSteps ? arena.maxSteps : base.agent.maxSteps,
+          systemPromptExtra: arena.prompt ? arena.prompt : base.agent.systemPromptExtra
+        }
+      }
+    : base
+  const provider = arena ? (providerById(arena.providerId) ?? activeProvider(settings)) : activeProvider(settings)
   const apiKey = getApiKey(provider.id)
   exchange.setTarget({ model: provider.model ?? '(не задана)', provider: provider.name, baseUrl: provider.baseUrl })
 
@@ -745,7 +805,7 @@ export async function runAgent(
   }
 
   /** Narrowed once so the step closure below keeps a plain string. */
-  const model = provider.model
+  const model = arena?.model ?? provider.model
   const extraBody = parseJsonObject(settings.advanced.extraBody)
   const extraHeaders = parseJsonObject(settings.advanced.extraHeaders)
 
@@ -753,7 +813,7 @@ export async function runAgent(
   // settings supply the default for chats that have none. The value arrives over
   // IPC, so it is checked instead of trusted. A saving mode may lower it — never
   // raise it — and the UI says so in the thinking sheet.
-  const requested = request.thinking
+  const requested = request.arena?.thinking ?? request.thinking
   const chatThinking: ThinkingLevel =
     requested && THINKING_LEVELS.includes(requested) ? requested : settings.chat.defaultThinking
   const saving = savingPlan(settings.agent.tokenSaving)
@@ -812,9 +872,12 @@ export async function runAgent(
 
   const night = request.night === true
   // A night run trades confirmations for a bigger budget, capped by settings.
-  const stepLimit = night
-    ? Math.max(settings.agent.maxSteps, settings.agent.nightMaxSteps)
-    : settings.agent.maxSteps
+  // An arena budget wins outright: the contestant's run is sized by its card.
+  const stepLimit = arena?.maxSteps
+    ? arena.maxSteps
+    : night
+      ? Math.max(settings.agent.maxSteps, settings.agent.nightMaxSteps)
+      : settings.agent.maxSteps
   activeRun = { requestId, emit }
 
   const history = request.messages.slice(-settings.agent.historyMessages)
@@ -830,11 +893,51 @@ export async function runAgent(
     ? (skillCatalog.find((item) => item.id === request.skillId) ?? null)
     : null
   const skill = settings.skills.enabled ? (pinned ?? selectSkill(lastUserText, skillCatalog)) : null
+
+  /**
+   * The model picks its own playbook: the catalog with one-line descriptions
+   * is in the system prompt, and use_skill loads the full rules on demand.
+   * The heuristic selectSkill above stays as the fallback for the system
+   * prompt; a mid-run pick extends it with another domain's rules.
+   */
+  const useSkillTool: ToolDef | null =
+    settings.skills.enabled && skillCatalog.length > 0 && !pinned
+      ? {
+          name: 'use_skill',
+          description:
+            'Load a skill playbook for this task domain (see the catalog in the system prompt). Call it as the first action when the task clearly matches one domain; the returned rules become binding for your work.',
+          parameters: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'Skill id from the catalog' } },
+            required: ['id']
+          },
+          risk: 'read',
+          execute: async (args) => {
+            const id = typeof args.id === 'string' ? args.id.trim() : ''
+            const found = skillCatalog.find((item) => item.id === id)
+            if (!found) {
+              const known = skillCatalog.map((item) => item.id).join(', ')
+              return {
+                ok: false,
+                summary: `unknown skill: ${id || '(empty)'}`,
+                detail: `Known skills: ${known}`
+              }
+            }
+            emit({ requestId, type: 'skill', skillId: found.id })
+            return {
+              ok: true,
+              summary: `skill "${found.titleEn}" loaded`,
+              detail: found.rules.map((rule) => `- ${rule}`).join('\n')
+            }
+          }
+        }
+      : null
   if (skill) emit({ requestId, type: 'skill', skillId: skill.id })
 
-  const systemPrompt = await buildSystemPrompt(mode, request, settings, skill)
+  const systemPrompt = await buildSystemPrompt(mode, request, settings, skill, skillCatalog)
   exchange.setSystemPrompt(systemPrompt)
   const toolDefs = toolsForMode(mode)
+  if (useSkillTool) toolDefs.push(useSkillTool)
   const tools = toolDefs.map(openAiToolSchema)
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -871,7 +974,17 @@ export async function runAgent(
       // Reasoning models (o-series, deepseek-reasoner) reject sampling outright,
       // and a provider that complained once is not asked again.
       ...(sendSampling
-        ? { temperature: settings.agent.temperature, top_p: settings.agent.topP }
+        ? {
+            temperature: settings.agent.temperature,
+            top_p: settings.agent.topP,
+            ...(settings.agent.presencePenalty !== 0
+              ? { presence_penalty: settings.agent.presencePenalty }
+              : {}),
+            ...(settings.agent.frequencyPenalty !== 0
+              ? { frequency_penalty: settings.agent.frequencyPenalty }
+              : {}),
+            ...(settings.agent.seed >= 0 ? { seed: settings.agent.seed } : {})
+          }
         : {}),
       ...(settings.agent.maxTokens > 0 ? { max_tokens: settings.agent.maxTokens } : {}),
       // Before `extraBody`, so a hand-written override in the settings still wins.
@@ -1709,7 +1822,12 @@ export async function runAgent(
     }
 
     if (settings.agent.autoVerifyClaims) {
-      if (mode === 'agent' && steps === 0 && CLAIMS_WORK_RE.test(totalText)) {
+      if (
+        mode === 'agent' &&
+        steps === 0 &&
+        WORK_REQUEST_RE.test(lastUserText) &&
+        CLAIMS_WORK_RE.test(totalText)
+      ) {
         // The reply sounded like it did the job, but no tool ever ran.
         emit({ requestId, type: 'notice', kind: 'no-tool-calls' })
       } else if (steps > 0 && lastToolOk === false && CLAIMS_SUCCESS_RE.test(totalText.slice(-600))) {

@@ -99,6 +99,146 @@
     overflow: hidden;
   }
 
+  /* Liquid glass: a specular highlight along the top edge of every button,
+   * like the iOS 26 glass caps. Only the highlight — the button keeps its own
+   * colors; a pseudo-element draws the light line and the faint top wash. */
+  .liquid-glass [data-slot='button'],
+  .liquid-glass [data-slot='input'],
+  .liquid-glass [data-slot='textarea'],
+  .liquid-glass [data-slot='select-trigger'],
+  .liquid-glass [data-slot='terminal-panel'] {
+    position: relative;
+  }
+  /* The title bar's tiny window and panel toggles stay matte: glass caps read
+   * as noise at that size. */
+  .liquid-glass .no-glass [data-slot='button']::after {
+    content: none;
+  }
+
+  /* The switch knob carries the glass cap, not the track: a wash over the
+   * whole track would erase the on/off colors underneath. */
+  .liquid-glass [data-slot='switch-thumb'] {
+    position: relative;
+  }
+  .liquid-glass [data-slot='button']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.22),
+      rgb(255 255 255 / 0.06) 42%,
+      transparent 58%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.55),
+      inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
+  /* The terminal dock gets the same top cap; it is docked bottom-up, so the
+     glass line sits on its raised top edge. */
+  .liquid-glass [data-slot='terminal-panel']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.18),
+      rgb(255 255 255 / 0.05) 30px,
+      transparent 60px
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.5),
+      inset 0 0 0 1px rgb(255 255 255 / 0.07);
+  }
+  .dark .liquid-glass [data-slot='terminal-panel']::after {
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.1),
+      rgb(255 255 255 / 0.03) 30px,
+      transparent 60px
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.28),
+      inset 0 0 0 1px rgb(255 255 255 / 0.05);
+  }
+  /* Inputs and selects get the same cap; input-specific tweaks: a narrower
+   * focus-ring interplay means the highlight sits under the border, and the
+   * caret area stays untouched since the layer is pointer-transparent. */
+  .liquid-glass [data-slot='input']::after,
+  .liquid-glass [data-slot='textarea']::after,
+  .liquid-glass [data-slot='select-trigger']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.16),
+      rgb(255 255 255 / 0.04) 42%,
+      transparent 58%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.45),
+      inset 0 0 0 1px rgb(255 255 255 / 0.06);
+  }
+  /* On a white knob the glass reads through edge shading, not a white wash:
+   * a bright top line, a faint dark rim and a heavier bottom edge. */
+  .liquid-glass [data-slot='switch-thumb']::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.85) 0%,
+      rgb(255 255 255 / 0.25) 42%,
+      rgb(18 18 26 / 0.07) 100%
+    );
+    box-shadow:
+      inset 0 0.5px 0 0 rgb(255 255 255 / 0.95),
+      inset 0 -1px 0 0 rgb(18 18 26 / 0.12),
+      inset 0 0 0 0.5px rgb(18 18 26 / 0.1);
+  }
+
+  .dark .liquid-glass [data-slot='input']::after,
+  .dark .liquid-glass [data-slot='textarea']::after,
+  .dark .liquid-glass [data-slot='select-trigger']::after {
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.1),
+      rgb(255 255 255 / 0.03) 42%,
+      transparent 58%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.22),
+      inset 0 0 0 1px rgb(255 255 255 / 0.04);
+  }
+
+  .dark .liquid-glass [data-slot='button']::after {
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.13),
+      rgb(255 255 255 / 0.04) 42%,
+      transparent 58%
+    );
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.3),
+      inset 0 0 0 1px rgb(255 255 255 / 0.05);
+  }
+
+  /* The tray popup window is transparent: its rounded corners are drawn by
+   * the menu component itself, so the page background must step aside. */
+  html[data-tray-menu],
+  html[data-tray-menu] body {
+    background: transparent;
+  }
+
   /* Only the code editor reads as a rounded surface; side panels stay separate. */
   .workspace-shell {
     background: var(--card);
@@ -165,6 +305,22 @@
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
+}
+
+/* Settings → Interface → Density: compact tightens the main surfaces.
+   The file tree reads the setting in-component; these rules cover the rest. */
+.density-compact [data-testid='chat-scroll'] > div {
+  gap: 6px !important;
+}
+.density-compact .composer-frame {
+  padding: 6px !important;
+}
+.density-compact [data-slot='terminal-panel'] > div:first-of-type {
+  height: 28px;
+}
+.density-compact [data-testid='mcp-presets'] p,
+.density-compact [data-testid='mcp-presets'] span {
+  line-height: 1.25;
 }
 
 /* Settings → Interface → Animations off. */

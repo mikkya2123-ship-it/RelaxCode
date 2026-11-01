@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { app } from 'electron'
 import {
   playbookFileName,
@@ -150,6 +150,7 @@ function blenderConfigDir(version: string | null): string | null {
 }
 
 export async function detectApps(appId: string): Promise<McpDetectedApp[]> {
+  if (appId === 'godot') return detectGodot()
   if (appId !== 'blender') return []
   if (process.platform !== 'win32') return []
 
@@ -264,6 +265,109 @@ async function ensureRuntime(): Promise<string> {
   return python
 }
 
+/* ----------------------------------------------------- the Godot connector */
+
+/**
+ * Godot needs no addon: the community godot-mcp server drives the editor
+ * through its command line, so the setup only has to find the executable and
+ * hand it to the server via GODOT_PATH.
+ */
+const GODOT_SERVER_NAME = 'godot'
+
+function godotSearchDirs(): string[] {
+  const home = app.getPath('home')
+  return [
+    join(home, 'AppData', 'Local', 'Godot'),
+    join(home, 'AppData', 'Roaming', 'Godot'),
+    'C:\\Program Files\\Godot',
+    'C:\\Program Files (x86)\\Godot',
+    'D:\\Godot',
+    join(home, 'Downloads'),
+    join(home, 'Загрузки'),
+    home
+  ]
+}
+
+function godotExeCandidates(): string[] {
+  const out: string[] = []
+  const ignored = new Set(['ElevatedDiagnostics', 'Windows', 'System32', 'Temp'])
+  const visit = (dir: string, depth: number): void => {
+    if (depth > 3 || !existsSync(dir)) return
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      // Protected directories (EPERM) are simply skipped.
+      return
+    }
+    for (const entry of entries) {
+      if (ignored.has(entry.name)) continue
+      const full = join(dir, entry.name)
+      try {
+        if (entry.isDirectory()) visit(full, depth + 1)
+        else if (/^godot.*\.exe$/i.test(entry.name)) out.push(full)
+      } catch {
+        // One unreadable entry must not kill the whole scan.
+      }
+    }
+  }
+  for (const dir of godotSearchDirs()) visit(dir, 0)
+  return out
+}
+
+function detectGodot(): McpDetectedApp[] {
+  if (process.platform !== 'win32') return []
+  const seen = new Set<string>()
+  return godotExeCandidates()
+    .filter((exePath) => {
+      const key = exePath.toLowerCase()
+      if (seen.has(key) || /_console\.exe$|\.tmp$/i.test(exePath)) return false
+      seen.add(key)
+      return true
+    })
+    .map((exePath) => ({
+      app: 'godot',
+      label: `Godot — ${basename(exePath)}`,
+      exePath,
+      version: null,
+      configDir: null,
+      addonInstalled: false
+    }))
+}
+
+async function setupGodot(exePath: string | null): Promise<McpSetupResult> {
+  setupLine('Setting up the Godot connector …')
+  const resolved = exePath ?? godotExeCandidates()[0] ?? null
+  if (!resolved || !existsSync(resolved)) {
+    const message = 'Godot not found on this computer. Install it, or add the godot server manually with GODOT_PATH set.'
+    setupLine(message, 'error')
+    return { ok: false, error: message, serverName: null }
+  }
+  setupLine(`Found Godot: ${resolved}`)
+  setupLine('Registering the godot MCP server (it runs via npx and needs Node.js) …')
+  saveServer({
+    name: GODOT_SERVER_NAME,
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', 'godot-mcp'],
+    env: { GODOT_PATH: resolved },
+    cwd: '',
+    url: '',
+    enabled: true,
+    trusted: false,
+    defaultRisk: 'exec',
+    toolRisk: {},
+    disabledTools: [],
+    timeoutMs: 120000
+  })
+  ensurePlaybook(
+    GODOT_SERVER_NAME,
+    `# Godot playbook\n\nThe godot MCP server drives the Godot editor through its command line.\n\nRules:\n- Use the godot tools for anything inside the engine: opening the project in the editor, running the current scene, capturing debug output.\n- The executable is fixed via GODOT_PATH; never try to launch Godot with run_command.\n- Godot must not be already running with the same project open, or the launch fails.\n`
+  )
+  setupLine('Done. Trust the godot server and connect.')
+  return { ok: true, error: null, serverName: GODOT_SERVER_NAME }
+}
+
 /* --------------------------------------------------------------- setup flow */
 
 const BLENDER_SERVER_NAME = 'blender'
@@ -319,8 +423,9 @@ async function setupBlender(): Promise<McpSetupResult> {
   return { ok: true, error: null, serverName: BLENDER_SERVER_NAME }
 }
 
-export function setupConnector(appId: string): Promise<McpSetupResult> {
+export function setupConnector(appId: string, exePath?: string): Promise<McpSetupResult> {
   if (appId === 'blender') return setupBlender()
+  if (appId === 'godot') return setupGodot(exePath ?? null)
   return Promise.resolve({ ok: false, error: 'unknown-app', serverName: null })
 }
 

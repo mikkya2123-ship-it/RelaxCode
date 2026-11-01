@@ -42,6 +42,13 @@ export const CURSOR_BLINKING = ['blink', 'smooth', 'phase', 'expand', 'solid'] a
 export const LINE_HIGHLIGHTS = ['none', 'line', 'all'] as const
 export const LINE_NUMBERS = ['on', 'off', 'relative'] as const
 export const WHITESPACE = ['none', 'selection', 'all'] as const
+export const CURSOR_CARET = ['off', 'on', 'explicit'] as const
+export const FOLDING_CONTROLS = ['always', 'mouseover', 'never'] as const
+export const MATCH_BRACKETS = ['never', 'near', 'always'] as const
+export const OCCURRENCES = ['off', 'singleFile', 'multiFile'] as const
+export const MULTI_CURSOR = ['ctrlCmd', 'alt'] as const
+export const AUTO_CLOSE = ['always', 'languageDefined', 'beforeWhitespace', 'never'] as const
+export const AUTO_INDENT = ['none', 'keep', 'brackets', 'advanced', 'full'] as const
 
 /** One connection profile (endpoint + key + default model). */
 export interface ProviderProfile {
@@ -77,6 +84,12 @@ export interface AgentSettings {
   maxRulesChars: number
   retryAttempts: number
   retryBaseSeconds: number
+  /** -2–2. Penalises tokens that already appeared in the reply. */
+  presencePenalty: number
+  /** -2–2. Penalises tokens the reply has used a lot. */
+  frequencyPenalty: number
+  /** Deterministic sampling seed; -1 = let the provider choose. */
+  seed: number
   contextActiveFile: boolean
   contextOpenFiles: boolean
   rulesEnabled: boolean
@@ -189,6 +202,45 @@ export interface EditorSettings {
   padding: number
   autoSave: AutoSaveMode
   autoSaveDelayMs: number
+  /** Smooth movement of the caret between positions. */
+  cursorSmoothCaret: (typeof CURSOR_CARET)[number]
+  /** Cursor thickness in pixels. */
+  cursorWidth: number
+  /** Code-folding controls in the gutter. */
+  folding: boolean
+  showFoldingControls: (typeof FOLDING_CONTROLS)[number]
+  /** Highlight the bracket pair around the cursor. */
+  matchBrackets: (typeof MATCH_BRACKETS)[number]
+  /** Highlight other occurrences of the selected word. */
+  occurrencesHighlight: (typeof OCCURRENCES)[number]
+  /** Highlight every occurrence of the current selection. */
+  selectionHighlight: boolean
+  /** Keep syntax colours when copying to the clipboard. */
+  copyWithSyntaxHighlighting: boolean
+  /** Modifier that adds cursors: Ctrl/Cmd or Alt. */
+  multiCursorModifier: (typeof MULTI_CURSOR)[number]
+  /** Ctrl + mouse wheel changes the font size. */
+  mouseWheelZoom: boolean
+  /** Renaming an HTML/CSS tag pair edits both ends. */
+  linkedEditing: boolean
+  /** Auto-close brackets while typing. */
+  autoClosingBrackets: (typeof AUTO_CLOSE)[number]
+  /** Auto-close quotes while typing. */
+  autoClosingQuotes: (typeof AUTO_CLOSE)[number]
+  /** How aggressively the editor keeps indentation on new lines. */
+  autoIndent: (typeof AUTO_INDENT)[number]
+  /** Drag text with the mouse to move it. */
+  dragAndDrop: boolean
+  /** Copy an empty selection to the clipboard (cut/copy the whole line). */
+  emptySelectionClipboard: boolean
+  /** Paste with the indentation the target line expects. */
+  formatOnPaste: boolean
+  /** Border between the overview ruler and the editor edge. */
+  overviewRulerBorder: boolean
+  /** Thickness of both scrollbars, in pixels. */
+  scrollbarSize: number
+  /** Highlight the indentation guide of the current block. */
+  highlightActiveIndentGuide: boolean
 }
 
 export interface UiSettings {
@@ -216,6 +268,10 @@ export interface UiSettings {
   screenOpen: boolean
   /** Screen dock width in pixels. */
   screenWidth: number
+  /** Closing the window hides it to the tray; the app and its runs keep going. */
+  closeToTray: boolean
+  /** iOS-26-style specular top edge on buttons. */
+  liquidGlass: boolean
 }
 
 export interface ChatSettings {
@@ -321,6 +377,9 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     maxRulesChars: 8000,
     retryAttempts: 3,
     retryBaseSeconds: 5,
+    presencePenalty: 0,
+    frequencyPenalty: 0,
+    seed: -1,
     contextActiveFile: true,
     contextOpenFiles: true,
     rulesEnabled: true,
@@ -397,7 +456,27 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     glyphMargin: false,
     padding: 10,
     autoSave: 'off',
-    autoSaveDelayMs: 1200
+    autoSaveDelayMs: 1200,
+    cursorSmoothCaret: 'off',
+    cursorWidth: 2,
+    folding: true,
+    showFoldingControls: 'mouseover',
+    matchBrackets: 'near',
+    occurrencesHighlight: 'singleFile',
+    selectionHighlight: true,
+    copyWithSyntaxHighlighting: true,
+    multiCursorModifier: 'alt',
+    mouseWheelZoom: false,
+    linkedEditing: true,
+    autoClosingBrackets: 'languageDefined',
+    autoClosingQuotes: 'languageDefined',
+    autoIndent: 'advanced',
+    dragAndDrop: true,
+    emptySelectionClipboard: true,
+    formatOnPaste: false,
+    overviewRulerBorder: false,
+    scrollbarSize: 10,
+    highlightActiveIndentGuide: false
   },
   ui: {
     theme: 'light',
@@ -416,7 +495,9 @@ export const DEFAULT_SETTINGS: SettingsValues = {
     chatWidth: 384,
     serversPanel: true,
     screenOpen: false,
-    screenWidth: 360
+    screenWidth: 360,
+    closeToTray: true,
+    liquidGlass: false
   },
   chat: {
     defaultMode: 'agent',

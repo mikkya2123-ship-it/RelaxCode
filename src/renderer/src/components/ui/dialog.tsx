@@ -25,7 +25,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn('fixed inset-0 z-50 bg-black/25 animate-fade-in', className)}
+      className={cn('fixed inset-0 z-50 bg-black/50 animate-fade-in', className)}
       {...props}
     />
   )
@@ -33,16 +33,19 @@ function DialogOverlay({
 
 function DialogContent({
   className,
+  overlayClassName,
   children,
   showCloseButton = true,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /** Darker scrim for photo lightboxes; the default stays light. */
+  overlayClassName?: string
 }): React.JSX.Element {
   const t = useT()
   return (
     <DialogPrimitive.Portal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

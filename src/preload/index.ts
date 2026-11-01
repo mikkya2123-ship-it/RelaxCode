@@ -47,6 +47,101 @@ const api = {
       }
     }
   },
+  arena: {
+    start: (
+      task: string,
+      attachments: unknown[],
+      contestants: Array<{ providerId: string; model: string; style: string }>
+    ): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ARENA_START, task, attachments, contestants),
+    pick: (contestantId: number): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.ARENA_PICK, contestantId),
+    /** Serves the contestant's snapshot over an ephemeral local server. */
+    preview: (contestantId: number): Promise<{ ok: boolean; url?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.ARENA_PREVIEW, contestantId),
+    previewStop: (): void => ipcRenderer.send(IPC.ARENA_PREVIEW_STOP),
+    cancel: (): void => ipcRenderer.send(IPC.ARENA_CANCEL),
+    onEvent: (callback: (event: unknown) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: unknown): void => callback(payload)
+      ipcRenderer.on(IPC.ARENA_EVENT, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.ARENA_EVENT, listener)
+      }
+    }
+  },
+  team: {
+    get: (): Promise<unknown> => ipcRenderer.invoke(IPC.TEAM_GET),
+    save: (state: unknown): Promise<unknown> => ipcRenderer.invoke(IPC.TEAM_SAVE, state),
+    taskAdd: (task: {
+      title: string
+      description: string
+      assigneeId: string
+      createdBy: string
+    }): Promise<unknown> => ipcRenderer.invoke(IPC.TEAM_TASK_ADD, task),
+    taskStatus: (taskId: string, status: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.TEAM_TASK_STATUS, taskId, status),
+    taskRemove: (taskId: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.TEAM_TASK_REMOVE, taskId),
+    meSet: (memberId: string | null, token?: string): Promise<unknown> =>
+      ipcRenderer.invoke(IPC.TEAM_ME_SET, memberId, token),
+    meGet: (): Promise<{ memberId: string | null; hasToken: boolean }> =>
+      ipcRenderer.invoke(IPC.TEAM_ME_GET),
+    commitPush: (message: string): Promise<{ ok: boolean; error?: string; branch?: string }> =>
+      ipcRenderer.invoke(IPC.TEAM_COMMIT_PUSH, message),
+    pull: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke(IPC.TEAM_PULL),
+    rosterPush: (): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.TEAM_ROSTER_PUSH),
+    githubCheck: (
+      owner: string,
+      repo: string,
+      token: string
+    ): Promise<{
+      ok: boolean
+      login?: string
+      scopes?: string
+      repoAccess?: boolean
+      canPush?: boolean
+      error?: string
+    }> => ipcRenderer.invoke(IPC.TEAM_GITHUB_CHECK, owner, repo, token),
+    githubCreate: (
+      owner: string,
+      repo: string,
+      token: string
+    ): Promise<{ ok: boolean; error?: string; url?: string }> =>
+      ipcRenderer.invoke(IPC.TEAM_GITHUB_CREATE, owner, repo, token),
+    onEvent: (callback: (event: unknown) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, payload: unknown): void => callback(payload)
+      ipcRenderer.on(IPC.TEAM_EVENT, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.TEAM_EVENT, listener)
+      }
+    }
+  },
+  tray: {
+    /** Fired when a tray menu item is picked: 'new-chat' or 'open-settings'. */
+    onCommand: (callback: (command: string) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, command: string): void => callback(command)
+      ipcRenderer.on(IPC.TRAY_COMMAND, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.TRAY_COMMAND, listener)
+      }
+    },
+    /** From the tray menu window: an item was clicked. */
+    action: (action: string): void => ipcRenderer.send(IPC.TRAY_MENU_ACTION, action),
+    /** The menu state (checkbox + language), pushed when the menu opens. */
+    onState: (
+      callback: (state: { closeToTray: boolean; language: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: IpcRendererEvent,
+        state: { closeToTray: boolean; language: string }
+      ): void => callback(state)
+      ipcRenderer.on(IPC.TRAY_MENU_STATE, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.TRAY_MENU_STATE, listener)
+      }
+    }
+  },
   workspace: {
     openFolder: (): Promise<OpenFolderResult | null> =>
       ipcRenderer.invoke(IPC.WORKSPACE_OPEN_FOLDER),
@@ -112,7 +207,8 @@ const api = {
       ipcRenderer.invoke(IPC.MCP_INVOKE, server, tool, argsJson),
     detect: (appId: string): Promise<McpDetectedApp[]> =>
       ipcRenderer.invoke(IPC.MCP_DETECT, appId),
-    setup: (appId: string): Promise<McpSetupResult> => ipcRenderer.invoke(IPC.MCP_SETUP, appId),
+    setup: (appId: string, exePath?: string): Promise<McpSetupResult> =>
+      ipcRenderer.invoke(IPC.MCP_SETUP, appId, exePath),
     launch: (appId: string, exePath: string): Promise<McpStartResult> =>
       ipcRenderer.invoke(IPC.MCP_LAUNCH, appId, exePath),
     playbookGet: (server: string): Promise<string | null> =>

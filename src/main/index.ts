@@ -1,7 +1,197 @@
-import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, shell } from 'electron'
+import { app, BrowserWindow, desktopCapturer, dialog, ipcMain, net, screen, shell, Tray } from 'electron'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+
+/**
+ * The window icon in dev: electron-vite runs `out/main/index.js`, so the repo
+ * root with `build/icon.ico` sits two levels up. A packaged build inherits the
+ * icon from the exe, and the file simply is not there.
+ */
+function windowIcon(): string | undefined {
+  const ico = join(__dirname, '../../build/icon.ico')
+  return existsSync(ico) ? ico : undefined
+}
+
+/* --------------------------------------------------------------------------- *
+ * Tray
+ *
+ * Closing the window hides it: the app, its runs and the dev servers stay
+ * alive, and the tray icon brings everything back. "Выход" in the menu is the
+ * only way to actually quit (besides killing the process).
+ * --------------------------------------------------------------------------- */
+
+let tray: Tray | null = null
+let trayMenuWindow: BrowserWindow | null = null
+let quitting = false
+/** The "still running" balloon shows once per session, the first time the window hides. */
+let trayHintShown = false
+
+function trayIconPath(): string {
+  if (process.platform === 'win32') {
+    return windowIcon() ?? join(__dirname, '../../build/icon-256.png')
+  }
+  return join(__dirname, '../../build/icon-256.png')
+}
+
+/** Tray labels follow the interface language setting. */
+function trayText(key: string): string {
+  const ru = getSettings().ui.language === 'ru'
+  const table: Record<string, [string, string]> = {
+    show: ['Открыть RelaxCode', 'Open RelaxCode'],
+    newChat: ['Новая задача', 'New task'],
+    settings: ['Настройки', 'Settings'],
+    background: ['Продолжать работу при закрытии окна', 'Keep running when the window is closed'],
+    quit: ['Выход', 'Quit'],
+    tooltip: ['RelaxCode — работает в фоне', 'RelaxCode — running in the background'],
+    hintTitle: ['RelaxCode работает в фоне', 'RelaxCode keeps running'],
+    hintText: [
+      'Окно закрыто, но задачи и серверы продолжают работать. Открыть — иконка в трее.',
+      'The window is closed, but tasks and servers keep running. Click the tray icon to reopen.'
+    ]
+  }
+  const pair = table[key] ?? ['?', '?']
+  return ru ? pair[0] : pair[1]
+}
+
+function showMainWindow(): void {
+  const win = mainWindow
+  if (!win) {
+    createWindow()
+    return
+  }
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
+
+function sendTrayCommand(command: string): void {
+  showMainWindow()
+  mainWindow?.webContents.send(IPC.TRAY_COMMAND, command)
+}
+
+/* The visible tray menu is a custom frameless window with the cosmic-shader
+ * background; the native menu above stays as an accessibility/CLI fallback. */
+
+const TRAY_MENU_WIDTH = 300
+const TRAY_MENU_HEIGHT = 372
+
+function createTrayMenuWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: TRAY_MENU_WIDTH,
+    height: TRAY_MENU_HEIGHT,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      // The shader keeps animating even while the menu window is hidden, so
+      // Windows cannot park its GL context between openings.
+      backgroundThrottling: false
+    }
+  })
+  // Any click outside — the menu loses focus — closes it, like a native popup.
+  // The window is only hidden, never destroyed while the session lives: hiding
+  // keeps DevTools attached and the renderer warm.
+  win.on('blur', () => win.hide())
+  win.on('closed', () => {
+    trayMenuWindow = null
+  })
+  const devUrl = process.env.ELECTRON_RENDERER_URL
+  if (devUrl) void win.loadURL(`${devUrl}#tray-menu`)
+  else void win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'tray-menu' })
+  return win
+}
+
+/** Opens the custom menu right above the tray icon. */
+function showTrayMenu(trayBounds: Electron.Rectangle): void {
+  if (!trayMenuWindow) trayMenuWindow = createTrayMenuWindow()
+  const menu = trayMenuWindow
+  const [display] = screen.getAllDisplays()
+  const work = display?.workArea
+  const x = Math.min(
+    Math.max(
+      trayBounds.x + trayBounds.width / 2 - TRAY_MENU_WIDTH / 2,
+      work ? work.x + 8 : 8
+    ),
+    work ? work.x + work.width - TRAY_MENU_WIDTH - 8 : TRAY_MENU_WIDTH
+  )
+  const y = Math.max(
+    trayBounds.y - TRAY_MENU_HEIGHT - 12,
+    work ? work.y + 8 : 8
+  )
+  menu.setPosition(x, y, false)
+  menu.webContents.send(IPC.TRAY_MENU_STATE, {
+    closeToTray: getSettings().ui.closeToTray,
+    language: getSettings().ui.language
+  })
+  menu.show()
+  menu.focus()
+  // Transparent Windows windows are known to blank their WebGL content after
+  // a hide/show cycle; invalidating the compositor forces a fresh frame.
+  menu.webContents.invalidate()
+}
+
+function hideTrayMenu(): void {
+  trayMenuWindow?.hide()
+}
+
+function handleTrayMenuAction(action: string): void {
+  hideTrayMenu()
+  switch (action) {
+    case 'open':
+      showMainWindow()
+      break
+    case 'new-chat':
+    case 'open-settings':
+      sendTrayCommand(action)
+      break
+    case 'toggle-background':
+      applySettingsPatch({ ui: { closeToTray: !getSettings().ui.closeToTray } })
+      break
+    case 'quit':
+      quitting = true
+      app.quit()
+      break
+    default:
+      break
+  }
+}
+
+function createTray(): void {
+  if (tray) return
+  try {
+    tray = new Tray(trayIconPath())
+    tray.setToolTip(trayText('tooltip'))
+    // The custom cosmic menu opens above the icon.
+    tray.on('right-click', (_event, bounds) => showTrayMenu(bounds ?? tray!.getBounds()))
+    // A left click on Windows opens the window.
+    tray.on('click', () => showMainWindow())
+  } catch (error) {
+    logFailure('tray', error instanceof Error ? error : new Error(String(error)))
+  }
+}
+
+function hideToTray(): void {
+  mainWindow?.hide()
+  if (trayHintShown || process.platform !== 'win32') return
+  trayHintShown = true
+  try {
+    tray?.displayBalloon({
+      iconType: 'info',
+      title: trayText('hintTitle'),
+      content: trayText('hintText')
+    })
+  } catch {
+    // A balloon is a nicety; failing to show one must not break the hide.
+  }
+}
 import {
   IPC,
   type ApprovalRequest,
@@ -28,8 +218,28 @@ import {
   type SettingsPatch,
   type SettingsSaveResult,
   type UserReply,
-  type WriteFileResult
+  type WriteFileResult,
+  type ArenaStyle
 } from '@shared/ipc'
+import type { TeamState, TeamTaskStatus } from '@shared/team'
+import { startArena, pickArenaContestant, cancelArena, arenaActive, startSnapshotPreview, stopSnapshotPreview } from './arena'
+import {
+  beginTeamSession,
+  getTeamState,
+  saveTeamState,
+  addTeamTask,
+  setTeamTaskStatus,
+  removeTeamTask,
+  setTeamMe,
+  getTeamMe,
+  teamCommitAndPush,
+  teamPull,
+  teamPushRoster,
+  teamGithubCreate,
+  teamGithubCheck,
+  applyMyScope,
+  setTeamNotify
+} from './team'
 import {
   addRecentWorkspace,
   applySettingsPatch,
@@ -137,6 +347,7 @@ function createWindow(): void {
     show: false,
     frame: false,
     autoHideMenuBar: true,
+    icon: windowIcon(),
     backgroundColor: '#fafafa',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -158,6 +369,14 @@ function createWindow(): void {
   // files, speech, chat export, scheduled prompts).
   setUiWindow(mainWindow)
   mainWindow.on('closed', () => setUiWindow(null))
+
+  // Closing the window keeps the app alive in the tray while the setting is on
+  // and the user is not quitting: runs, servers and the MCP links stay up.
+  mainWindow.on('close', (event) => {
+    if (quitting || !getSettings().ui.closeToTray) return
+    event.preventDefault()
+    hideToTray()
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
@@ -423,8 +642,15 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.CHAT_SEND, async (event, request: ChatSendRequest): Promise<void> => {
     const sender = event.sender
+    // The arena owns the single-run engine while its contestants compete.
+    if (arenaActive() && !request.arena) {
+      sender.send(IPC.CHAT_EVENT, { requestId: request.requestId, type: 'error', message: 'arena-running' })
+      return
+    }
     // Tool names are only carried by tool-start; remember them so every MCP
     // tool result can be paired with a Screen panel frame.
+    // Team mode: agent edits are limited to the local user's specialty scope.
+    applyMyScope()
     const toolNames = new Map<string, string>()
     await runAgent(
       request,
@@ -507,6 +733,11 @@ function registerIpc(): void {
     if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send(IPC.MCP_EVENT, event)
   })
 
+  // Friendly Development team: live status of the task queue.
+  setTeamNotify((event: import('@shared/team').TeamEvent) => {
+    if (!mainWindow?.isDestroyed()) mainWindow?.webContents.send(IPC.TEAM_EVENT, event)
+  })
+
   ipcMain.handle(IPC.MCP_LIST, () => listStates())
 
   ipcMain.handle(IPC.MCP_SAVE, (_event, config: unknown): McpSaveResult => {
@@ -568,8 +799,8 @@ function registerIpc(): void {
     return detectApps(appId)
   })
 
-  ipcMain.handle(IPC.MCP_SETUP, (_event, appId: string): Promise<McpSetupResult> => {
-    return setupConnector(appId)
+  ipcMain.handle(IPC.MCP_SETUP, (_event, appId: string, exePath?: string): Promise<McpSetupResult> => {
+    return setupConnector(appId, exePath)
   })
 
   ipcMain.handle(IPC.MCP_LAUNCH, (_event, appId: string, exePath: string): McpStartResult => {
@@ -595,7 +826,14 @@ function registerIpc(): void {
       thumbnailSize: { width: 1, height: 1 },
       fetchWindowIcons: false
     })
-    const source = sources.find((item) => matcher.test(item.name))
+    let source = sources.find((item) => matcher.test(item.name))
+    // Godot's project manager is a separate window whose title does not
+    // contain "godot" — without this fallback the dock goes blank the moment
+    // the user leaves the editor.
+    if (!source && appId === 'godot') {
+      const manager = new RegExp('project manager', 'i')
+      source = sources.find((item) => manager.test(item.name))
+    }
     if (!source) return { ok: false, reason: 'not-found' }
     return { ok: true, sourceId: source.id, title: source.name }
   })
@@ -617,10 +855,100 @@ function registerIpc(): void {
 
   // The terminal panel at the bottom of the editor.
   ipcMain.handle(IPC.TERM_LIST, (): ReturnType<typeof listTerminals> => listTerminals())
+
+  // Arena: tournament of agent contestants. Events stream to the arena screen;
+  // a running arena fences the normal chat off the single-run agent engine.
+  ipcMain.handle(
+    IPC.ARENA_START,
+    (
+      _event,
+      task: string,
+      attachments: unknown[],
+      entrants: Array<{
+        providerId: string
+        model: string
+        style: string
+        temperature?: number
+        thinking?: string
+        topP?: number
+        maxSteps?: number
+        prompt?: string
+      }>
+    ) => {
+      const valid = entrants.filter(
+        (
+          entrant
+        ): entrant is {
+          providerId: string
+          model: string
+          style: ArenaStyle
+          temperature?: number
+          thinking?: string
+        } =>
+          (entrant.style === 'careful' ||
+            entrant.style === 'balanced' ||
+            entrant.style === 'bold') &&
+          (entrant.thinking === undefined ||
+            ['off', 'low', 'medium', 'high'].includes(entrant.thinking)) &&
+          (entrant.temperature === undefined ||
+            (Number.isFinite(entrant.temperature) && entrant.temperature >= 0 && entrant.temperature <= 2))
+      )
+      return startArena(
+        String(task ?? ''),
+        Array.isArray(attachments)
+          ? (attachments as import('@shared/attachments').AttachmentRef[])
+          : [],
+        valid,
+        (arenaEvent) => {
+          mainWindow?.webContents.send(IPC.ARENA_EVENT, arenaEvent)
+        }
+      )
+    }
+  )
+  ipcMain.handle(IPC.ARENA_PICK, (_event, contestantId: number) =>
+    pickArenaContestant(Number(contestantId))
+  )
+  ipcMain.on(IPC.ARENA_CANCEL, () => cancelArena())
+  ipcMain.handle(IPC.ARENA_PREVIEW, (_event, contestantId: number) =>
+    startSnapshotPreview(Number(contestantId))
+  )
+  ipcMain.on(IPC.ARENA_PREVIEW_STOP, () => stopSnapshotPreview())
+
+  // Friendly Development team: shared roster/tasks, local identity, git sync.
+  ipcMain.handle(IPC.TEAM_GET, () => getTeamState())
+  ipcMain.handle(IPC.TEAM_SAVE, (_event, next: TeamState) => saveTeamState(next))
+  ipcMain.handle(
+    IPC.TEAM_TASK_ADD,
+    (_event, task: { title: string; description: string; assigneeId: string; createdBy: string }) =>
+      addTeamTask(task)
+  )
+  ipcMain.handle(IPC.TEAM_TASK_STATUS, (_event, taskId: string, status: TeamTaskStatus) =>
+    setTeamTaskStatus(String(taskId), status)
+  )
+  ipcMain.handle(IPC.TEAM_TASK_REMOVE, (_event, taskId: string) => removeTeamTask(String(taskId)))
+  ipcMain.handle(IPC.TEAM_ME_SET, (_event, memberId: string | null, token?: string) =>
+    setTeamMe(memberId ? String(memberId) : null, token === undefined ? undefined : String(token))
+  )
+  ipcMain.handle(IPC.TEAM_ME_GET, () => getTeamMe())
+  ipcMain.handle(IPC.TEAM_COMMIT_PUSH, (_event, message: string) =>
+    teamCommitAndPush(String(message ?? ''))
+  )
+  ipcMain.handle(IPC.TEAM_PULL, () => teamPull())
+  ipcMain.handle(IPC.TEAM_ROSTER_PUSH, () => teamPushRoster())
+  ipcMain.handle(IPC.TEAM_GITHUB_CHECK, (_event, owner: string, repo: string, token: string) =>
+    teamGithubCheck(String(owner ?? ''), String(repo ?? ''), String(token ?? ''))
+  )
+  ipcMain.handle(
+    IPC.TEAM_GITHUB_CREATE,
+    (_event, owner: string, repo: string, token: string) =>
+      teamGithubCreate(String(owner ?? ''), String(repo ?? ''), String(token ?? ''))
+  )
   ipcMain.handle(IPC.TERM_CREATE, (): TerminalSessionInfo => createTerminal())
   ipcMain.on(IPC.TERM_INPUT, (_event, id: string, line: string) => terminalInput(id, line))
   ipcMain.on(IPC.TERM_CLOSE, (_event, id: string) => closeTerminal(id))
   ipcMain.on(IPC.TERM_STOP, (_event, id: string) => stopTerminal(id))
+
+  ipcMain.on(IPC.TRAY_MENU_ACTION, (_event, action: string) => handleTrayMenuAction(action))
 
   setChangeListener((dirs) => {
     mainWindow?.webContents.send(IPC.WORKSPACE_CHANGED, dirs)
@@ -630,6 +958,8 @@ function registerIpc(): void {
 void app.whenReady().then(() => {
   registerIpc()
   createWindow()
+  createTray()
+  beginTeamSession()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -637,10 +967,13 @@ void app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // With the tray on, a hidden window is not a request to quit: the icon and
+  // the background work stay. The menu's "Выход" is the real quit.
+  if (process.platform !== 'darwin' && !getSettings().ui.closeToTray) app.quit()
 })
 
 app.on('before-quit', () => {
+  quitting = true
   // Dev servers, watchers and MCP connections must not outlive the IDE.
   if (getSettings().servers.stopOnExit) stopAllBackground()
   void stopAllMcp()

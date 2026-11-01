@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Images, Monitor, Play, RefreshCw, Trash2, Video, VideoOff } from 'lucide-react'
+import { Images, Monitor, Play, RefreshCw, Trash2, Video, VideoOff, X } from 'lucide-react'
 import type { McpServerState } from '@shared/mcp'
 import type { ScreenFrame } from '@/stores/screen'
 import { useScreenStore } from '@/stores/screen'
@@ -28,7 +28,7 @@ interface LiveState {
   title: string | null
 }
 
-export function ScreenPanel(): JSX.Element {
+export function ScreenPanel({ open }: { open: boolean }): JSX.Element {
   const t = useT()
   const settings = useSettingsStore((s) => s.settings)
   const [servers, setServers] = useState<McpServerState[] | null>(null)
@@ -77,9 +77,12 @@ export function ScreenPanel(): JSX.Element {
   return (
     <aside
       data-testid="screen-panel"
-      className="relative flex shrink-0 flex-col overflow-hidden border-l border-border bg-background"
-      style={{ width }}
+      // Always mounted: the width collapses to 0 when closed, so opening reads
+      // as the same smooth slide the chat panel makes.
+      className="relative h-full shrink-0 overflow-hidden bg-background transition-[width] duration-200 ease-out"
+      style={{ width: open ? width : 0 }}
     >
+      <div className="relative flex h-full w-[var(--screen-width)] flex-col border-l border-border" style={{ '--screen-width': `${width}px` } as React.CSSProperties}>
       <div
         onMouseDown={startResize}
         className="absolute inset-y-0 left-0 z-10 w-1 cursor-col-resize hover:bg-primary/30"
@@ -153,6 +156,7 @@ export function ScreenPanel(): JSX.Element {
           <FramesFeed server={active.name} />
         )}
       </div>
+      </div>
     </aside>
   )
 }
@@ -183,6 +187,7 @@ function LiveView({ server }: { server: string }): JSX.Element {
   const [state, setState] = useState<LiveState>({ status: 'idle', error: null, title: null })
   const [attempt, setAttempt] = useState(0)
   const [launching, setLaunching] = useState(false)
+  const lastSourceId = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -196,6 +201,7 @@ function LiveView({ server }: { server: string }): JSX.Element {
         setState({ status: 'error', error: 'not-found', title: null })
         return
       }
+      lastSourceId.current = source.sourceId
       try {
         // Desktop capture inside Electron: the main process hands us the
         // window id, the renderer turns it into a MediaStream. No resolution
@@ -227,8 +233,22 @@ function LiveView({ server }: { server: string }): JSX.Element {
     }
 
     void start()
+    // Apps like Godot swap windows mid-session (editor ↔ project manager):
+    // the old capture goes black. A light poll re-resolves the source and
+    // restarts the stream whenever the window identity changes.
+    const watcher = window.setInterval(async () => {
+      if (cancelled) return
+      const source = await window.relaxcode.screen.getSource(server)
+      if (cancelled) return
+      if (!source.ok) return // transient: keep the current stream alive
+      if (source.sourceId !== lastSourceId.current) {
+        setAttempt((value) => value + 1)
+      }
+    }, 2500)
+
     return () => {
       cancelled = true
+      window.clearInterval(watcher)
       stream?.getTracks().forEach((track) => track.stop())
     }
   }, [server, attempt])
@@ -347,15 +367,30 @@ function FramesFeed({ server }: { server: string }): JSX.Element {
       </div>
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
-        <DialogContent className="max-w-[90vw] p-2">
+        <DialogContent overlayClassName="bg-black/85" className="w-auto max-w-[94vw] border-0 bg-transparent p-2 shadow-none [&>button]:hidden">
           <DialogTitle className="sr-only">{selected?.caption ?? t('screen.frames.openLarge')}</DialogTitle>
           {selected && (
-            <figure className="space-y-2">
-              <img src={selected.dataUrl} alt={selected.caption} className="max-h-[80vh] w-full bg-black object-contain" />
-              <figcaption className="px-1 text-[11px] text-muted-foreground">
-                {selected.caption} · {formatTime(selected.at)}
-              </figcaption>
-            </figure>
+            <div className="relative inline-flex max-w-[94vw] flex-col">
+              <img
+                src={selected.dataUrl}
+                alt={selected.caption}
+                className="max-h-[82vh] w-auto max-w-full rounded-lg bg-black object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label={t('action.close')}
+                className="absolute -right-3 -top-3 rounded-full border border-white/20 bg-black/80 p-1.5 text-white/80 shadow-lg transition-colors hover:text-white"
+              >
+                <X className="size-4" />
+              </button>
+              <div className="flex items-center gap-2 px-1 pt-2 text-[11px] text-white/60">
+                <span className="min-w-0 flex-1 truncate text-white/80" title={selected.caption}>
+                  {selected.caption}
+                </span>
+                <span className="shrink-0 tabular-nums">{formatTime(selected.at)}</span>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

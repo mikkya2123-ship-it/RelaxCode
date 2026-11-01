@@ -16,6 +16,7 @@ import {
 import { useSettingsStore } from '@/stores/settings'
 import { useEditorStore } from '@/stores/editor'
 import { translate, useI18nStore } from '@/lib/i18n'
+import { toast } from '@/stores/toast'
 
 /** The row that is being typed into: a new entry or a new name for one. */
 export interface InlineEdit {
@@ -62,6 +63,13 @@ interface ExplorerState {
   requestDelete: (entry: DirEntry | null) => void
   confirmDelete: () => Promise<void>
   cancelDelete: () => void
+  /** Ctrl+click group selection; one confirm removes them all. */
+  multiSelected: string[]
+  pendingMultiDelete: string[] | null
+  toggleMultiSelect: (entry: DirEntry) => void
+  clearMultiSelect: () => void
+  requestMultiDelete: (paths: string[]) => void
+  confirmMultiDelete: () => Promise<void>
   duplicateEntry: (entry: DirEntry) => Promise<void>
   moveEntry: (path: string, targetDir: string) => Promise<void>
   setDragging: (path: string | null) => void
@@ -120,7 +128,8 @@ function remapState(state: ExplorerState, from: string, to: string): Partial<Exp
     childrenByDir,
     expanded: remapRecord(state.expanded),
     loading: remapRecord(state.loading),
-    selectedPath: state.selectedPath ? remapPath(state.selectedPath, from, to) : null
+    selectedPath: state.selectedPath ? remapPath(state.selectedPath, from, to) : null,
+  multiSelected: (state.multiSelected ?? []).map((item) => remapPath(item, from, to))
   }
 }
 
@@ -170,6 +179,8 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   inline: null,
   inlineError: null,
   pendingDelete: null,
+  multiSelected: [],
+  pendingMultiDelete: null,
   deleteError: null,
   draggingPath: null,
 
@@ -227,6 +238,8 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       inlineError: null,
       pendingDelete: null,
       deleteError: null,
+      multiSelected: [],
+      pendingMultiDelete: null,
       draggingPath: null
     }),
 
@@ -383,6 +396,48 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   },
 
   cancelDelete: () => set({ pendingDelete: null, deleteError: null }),
+
+  toggleMultiSelect: (entry) => {
+    set((s) => {
+      const has = s.multiSelected.includes(entry.path)
+      const next = has
+        ? s.multiSelected.filter((item) => item !== entry.path)
+        : [...s.multiSelected, entry.path]
+      return { multiSelected: next, selectedPath: entry.path }
+    })
+  },
+
+  clearMultiSelect: () => set({ multiSelected: [] }),
+
+  requestMultiDelete: (paths) => {
+    const root = get().rootPath
+    const safe = paths.filter((item) => root && !isSamePath(item, root))
+    if (safe.length === 0) return
+    set({ pendingMultiDelete: safe, deleteError: null })
+  },
+
+  confirmMultiDelete: async () => {
+    const paths = get().pendingMultiDelete
+    if (!paths) return
+    let okCount = 0
+    const failures: string[] = []
+    for (const path of paths) {
+      const result = await window.relaxcode.entries.remove(path)
+      if (result.ok) okCount += 1
+      else failures.push(`${path}: ${failureText(result)}`)
+    }
+    set({ pendingMultiDelete: null, multiSelected: [], deleteError: null })
+    if (failures.length > 0) {
+      toast(
+        tr('explorer.deletedSome', { ok: okCount, bad: failures.length }),
+        failures.slice(0, 3).join('\n'),
+        'error'
+      )
+    } else {
+      toast(tr('explorer.deletedMany', { n: okCount }))
+    }
+    await get().refreshAll()
+  },
 
   duplicateEntry: async (entry) => {
     const result = await window.relaxcode.entries.duplicate(entry.path)

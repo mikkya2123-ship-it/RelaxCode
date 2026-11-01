@@ -6,8 +6,7 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent
 } from 'react'
-import {
-  ArrowDown,
+import {ArrowDown,
   ArrowUp,
   ChevronDown,
   CircleAlert,
@@ -27,13 +26,13 @@ import {
   Square,
   Trash2,
   X,
-  Zap
-} from 'lucide-react'
+  Zap, Swords} from 'lucide-react'
 import type { ChatMode } from '@shared/ipc'
 import { ATTACHMENT_LIMITS, type AttachmentRef } from '@shared/attachments'
 import { LOOPS_BEFORE_OFF } from '@shared/model-memory'
 import { effectiveSkills, type Skill } from '@shared/skills'
 import { useUiStore } from '@/stores/ui'
+import { useArenaStore } from '@/stores/arena'
 import { useChatStore, type AttachmentPart } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
 import { toast } from '@/stores/toast'
@@ -499,7 +498,7 @@ export function ChatPanel(): JSX.Element {
             )}
           </div>
         ) : (
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          <div ref={scrollRef} data-testid="chat-scroll" className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <div className="flex flex-col gap-4">
               {messages.map((message) =>
                 message.role === 'user' ? (
@@ -849,7 +848,8 @@ export function ChatPanel(): JSX.Element {
               className="max-h-[200px] min-h-[56px] resize-none border-0 bg-transparent shadow-none focus-visible:border-0 focus-visible:ring-0"
             />
             <div className="flex items-center justify-between gap-2 px-2 pb-2">
-              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+              {/* pr-3 keeps the model sheet a touch shorter than the full row. */}
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden pr-3">
                 {/* The model chip and the mode switch only shape the next run,
                     so while one is streaming they give their room to the
                     steering buttons instead of squeezing them out. */}
@@ -870,7 +870,7 @@ export function ChatPanel(): JSX.Element {
                         // Shrinks with the panel — the name truncates, the
                         // chevron stays — so the icon buttons to the right
                         // never get pushed under the send button.
-                        'flex w-[160px] min-w-[56px] shrink items-center gap-1 rounded-md border border-input bg-card px-1.5 py-1 text-[11px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
+                        'flex min-w-[56px] flex-1 items-center gap-1 rounded-md border border-input bg-card px-1.5 py-1 text-[11px] text-muted-foreground transition-colors duration-150 hover:border-ring/60 hover:text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none',
                         // While the list is open the chip and the panel read as one sheet.
                         modelOpen && 'rounded-t-none'
                       )}
@@ -898,6 +898,34 @@ export function ChatPanel(): JSX.Element {
                     // instead of a fixed width — together they read as one.
                     className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-0 rounded-t-xl rounded-b-none border-b-0 p-0 shadow-none"
                   >
+                    {/* The mode lives in the sheet next to the model it applies
+                        to — one compact segmented row above the list. */}
+                    <div className="border-b border-border p-1.5 pb-2">
+                      <div
+                        role="radiogroup"
+                        data-testid="chat-modes"
+                        aria-label={t('chat.mode.label')}
+                        className="grid grid-cols-3 gap-1 rounded-lg bg-foreground/[0.05] p-0.5"
+                      >
+                        {MODES.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            role="radio"
+                            aria-checked={item === mode}
+                            onClick={() => setMode(item)}
+                            className={cn(
+                              'rounded-[6px] px-1.5 py-1 text-[11.5px] transition-colors duration-100',
+                              item === mode
+                                ? 'bg-card text-foreground shadow-xs'
+                                : 'text-muted-foreground hover:text-foreground'
+                            )}
+                          >
+                            {t(`chat.mode.${item}` as 'chat.mode.chat')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {/* The list is capped — a long model list scrolls instead of
                         covering the window, and the actions stay reachable. */}
                     <div
@@ -965,74 +993,66 @@ export function ChatPanel(): JSX.Element {
                 </DropdownMenu>
                 )}
 
-                {!streaming && (
-                <div
-                  data-testid="chat-modes"
-                  className="flex items-center gap-0.5 rounded-md bg-foreground/[0.05] p-0.5"
-                >
-                  {MODES.map((item) => (
+                {/* The per-run extras hug the right edge, so the model chip can
+                    stretch as far as the panel allows. */}
+                <div className="ml-auto flex items-center gap-0.5">
+                  <ThinkingMenu
+                    level={thinking}
+                    info={modelInfo}
+                    saving={tokenSaving}
+                    live={streaming && thinking !== 'off'}
+                    onChange={setThinking}
+                  />
+
+                  {!streaming && (
                     <button
-                      key={item}
                       type="button"
-                      onClick={() => setMode(item)}
-                      className={cn(
-                        'rounded-[5px] px-1.5 py-0.5 text-[11px] transition-colors duration-100',
-                        item === mode
-                          ? 'bg-card text-foreground shadow-xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      )}
+                      data-testid="chat-attach"
+                      title={t('chat.attach.title')}
+                      aria-label={t('chat.attach.title')}
+                      className={cn(iconButton)}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      {t(`chat.mode.${item}` as 'chat.mode.chat')}
+                      <Paperclip className="size-3.5" />
                     </button>
-                  ))}
-                </div>
-                )}
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    hidden
+                    onChange={(event) => {
+                      addFiles(event.target.files ?? [])
+                      // So picking the same file twice in a row still fires.
+                      event.target.value = ''
+                    }}
+                  />
 
-                <ThinkingMenu
-                  level={thinking}
-                  info={modelInfo}
-                  saving={tokenSaving}
-                  live={streaming && thinking !== 'off'}
-                  onChange={setThinking}
-                />
-
-                {!streaming && (
                   <button
                     type="button"
-                    data-testid="chat-attach"
-                    title={t('chat.attach.title')}
-                    aria-label={t('chat.attach.title')}
-                    className={cn(iconButton)}
-                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="chat-night"
+                    title={t('chat.night.title')}
+                    aria-pressed={night}
+                    className={cn(
+                      'rounded-md p-1 text-tertiary transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground',
+                      night && 'bg-amber-500/15 text-amber-500 hover:text-amber-500'
+                    )}
+                    onClick={toggleNight}
                   >
-                    <Paperclip className="size-3.5" />
+                    <MoonStar className="size-3.5" />
                   </button>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(event) => {
-                    addFiles(event.target.files ?? [])
-                    // So picking the same file twice in a row still fires.
-                    event.target.value = ''
-                  }}
-                />
 
-                <button
-                  type="button"
-                  data-testid="chat-night"
-                  title={t('chat.night.title')}
-                  aria-pressed={night}
-                  className={cn(
-                    'rounded-md p-1 text-tertiary transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground',
-                    night && 'bg-amber-500/15 text-amber-500 hover:text-amber-500'
-                  )}
-                  onClick={toggleNight}
-                >
-                  <MoonStar className="size-3.5" />
-                </button>
+                  <button
+                    type="button"
+                    data-testid="chat-arena"
+                    title={t('arena.title')}
+                    aria-label={t('arena.title')}
+                    className="rounded-md p-1 text-tertiary transition-colors duration-100 hover:bg-foreground/[0.06] hover:text-foreground"
+                    onClick={useArenaStore.getState().openArena}
+                  >
+                    <Swords className="size-3.5" />
+                  </button>
+                </div>
               </div>
 
               {streaming ? (
