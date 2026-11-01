@@ -376,7 +376,7 @@ export const ru = {
   'settings.cancel': 'Отмена',
   'settings.saved': 'Настройки сохранены',
 
-  'status.version': 'RelaxCode 0.1.0',
+  'status.version': 'RelaxCode 0.2.0',
 
   'action.cancel': 'Отмена',
   'action.close': 'Закрыть',
@@ -1634,7 +1634,7 @@ export const en: Record<TKey, string> = {
   'settings.cancel': 'Cancel',
   'settings.saved': 'Settings saved',
 
-  'status.version': 'RelaxCode 0.1.0',
+  'status.version': 'RelaxCode 0.2.0',
 
   'action.cancel': 'Cancel',
   'action.close': 'Close',
