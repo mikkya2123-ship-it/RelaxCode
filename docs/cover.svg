@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#111722"/><stop offset="1" stop-color="#202b3c"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#a3bdd8" stroke-opacity=".055"/></pattern>
+  </defs>
+  <rect width="1280" height="400" rx="20" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="20" fill="url(#grid)"/>
+  <rect x="64" y="66" width="30" height="4" rx="2" fill="#9ee9cb"/>
+  <text x="110" y="74" fill="#9ee9cb" font-family="Segoe UI,Arial,sans-serif" font-size="13" letter-spacing="3">DESKTOP AI WORKSPACE</text>
+  <text x="60" y="176" fill="#f5f7fb" font-family="Segoe UI,Arial,sans-serif" font-size="76" font-weight="650" letter-spacing="-3">RelaxCode</text>
+  <text x="65" y="231" fill="#bdc9d9" font-family="Segoe UI,Arial,sans-serif" font-size="23">От идеи — к коду.</text>
+  <text x="65" y="267" fill="#bdc9d9" font-family="Segoe UI,Arial,sans-serif" font-size="23">В вашем рабочем пространстве.</text>
+  <text x="65" y="337" fill="#8799b0" font-family="Segoe UI,Arial,sans-serif" font-size="14" letter-spacing="2">EDITOR / AGENT / TERMINAL / MCP</text>
+  <g transform="translate(765 68)">
+    <rect width="448" height="264" rx="14" fill="#111925" stroke="#3a495e"/>
+    <path d="M0 40H448M148 40V264" stroke="#303e51"/>
+    <circle cx="21" cy="20" r="4" fill="#9ee9cb"/><circle cx="36" cy="20" r="4" fill="#657a96"/><circle cx="51" cy="20" r="4" fill="#657a96"/>
+    <text x="20" y="76" fill="#788da7" font-family="Consolas,monospace" font-size="11">PROJECT</text>
+    <text x="20" y="108" fill="#becbdd" font-family="Consolas,monospace" font-size="13">src/</text>
+    <text x="32" y="135" fill="#becbdd" font-family="Consolas,monospace" font-size="13">app.tsx</text>
+    <text x="32" y="162" fill="#788da7" font-family="Consolas,monospace" font-size="13">styles.css</text>
+    <text x="20" y="189" fill="#788da7" font-family="Consolas,monospace" font-size="13">package.json</text>
+    <text x="173" y="80" fill="#9ee9cb" font-family="Consolas,monospace" font-size="13">const idea = await</text>
+    <text x="188" y="107" fill="#e8edf5" font-family="Consolas,monospace" font-size="13">agent.build(project)</text>
+    <rect x="174" y="136" width="228" height="5" rx="2" fill="#34455c"/>
+    <rect x="174" y="154" width="169" height="5" rx="2" fill="#34455c"/>
+    <rect x="173" y="192" width="248" height="46" rx="7" fill="#1e332f" stroke="#35534a"/>
+    <text x="189" y="220" fill="#a9e7ce" font-family="Segoe UI,Arial,sans-serif" font-size="13">Your next idea starts here.</text>
+  </g>
+</svg>

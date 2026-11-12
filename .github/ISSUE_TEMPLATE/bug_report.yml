@@ -1,0 +1,23 @@
+name: Ошибка
+description: Сообщить о проблеме в RelaxCode
+title: "[Bug]: "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия RelaxCode и Windows
+      placeholder: RelaxCode 0.2.0, Windows 11
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Что вы сделали, что ожидали и что произошло?
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Скриншоты и дополнительные сведения
+      description: Перед отправкой удалите API-ключи и другие личные данные.
