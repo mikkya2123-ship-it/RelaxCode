@@ -167,7 +167,8 @@ function normalize(raw: Partial<AppSettings> & LegacySettings): AppSettings {
     servers: mergeDefaults(DEFAULT_SETTINGS.servers, sanitizeServers(raw.servers)),
     notifications: mergeDefaults(DEFAULT_SETTINGS.notifications, sanitizeNotifications(raw.notifications)),
     advanced: mergeDefaults(DEFAULT_SETTINGS.advanced, sanitizeAdvanced(raw.advanced)),
-    keymap: mergeDefaults(DEFAULT_SETTINGS.keymap, sanitizeKeymap(raw.keymap))
+    keymap: mergeDefaults(DEFAULT_SETTINGS.keymap, sanitizeKeymap(raw.keymap)),
+    profile: mergeDefaults(DEFAULT_SETTINGS.profile, sanitizeProfile(raw.profile))
   }
 
   const stored = Array.isArray(raw.providers) ? raw.providers : []
@@ -309,6 +310,7 @@ function toValues(settings: AppSettings): SettingsValues {
     servers: settings.servers,
     notifications: settings.notifications,
     advanced: settings.advanced,
+    profile: settings.profile,
     keymap: settings.keymap
   }
 }
@@ -827,6 +829,19 @@ function sanitizeKeymap(value: unknown): Partial<SettingsValues['keymap']> {
   return out
 }
 
+/**
+ * The profile goes into the system prompt, so its length is bounded: a pasted
+ * novel would push out the tool schemas the model actually needs.
+ */
+function sanitizeProfile(value: unknown): Partial<SettingsValues['profile']> {
+  const raw = (value ?? {}) as Record<string, unknown>
+  const d = DEFAULT_SETTINGS.profile
+  const out: Partial<SettingsValues['profile']> = {}
+  if (raw.name !== undefined) out.name = asString(raw.name, d.name, 60).trim()
+  if (raw.about !== undefined) out.about = asString(raw.about, d.about, 4000)
+  return out
+}
+
 /** Rejects JSON that is not an object — the request body/headers must stay objects. */
 function invalidJsonObject(value: string): boolean {
   if (value.trim().length === 0) return false
@@ -885,6 +900,7 @@ export function applySettingsPatch(patch: SettingsPatch): SettingsSaveResult {
   if (patch.notifications) Object.assign(next.notifications, sanitizeNotifications(patch.notifications))
   if (patch.advanced) Object.assign(next.advanced, sanitizeAdvanced(patch.advanced))
   if (patch.keymap) Object.assign(next.keymap, sanitizeKeymap(patch.keymap))
+  if (patch.profile) Object.assign(next.profile, sanitizeProfile(patch.profile))
 
   if (invalidJsonObject(next.advanced.extraBody)) return { ok: false, error: 'invalid-json-body' }
   if (invalidJsonObject(next.advanced.extraHeaders)) return { ok: false, error: 'invalid-json-headers' }

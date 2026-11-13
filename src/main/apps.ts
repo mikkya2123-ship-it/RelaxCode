@@ -1,12 +1,33 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { promises as fsp } from 'node:fs'
+import { createServer, Socket } from 'node:net'
 import { basename, join } from 'node:path'
 import { app } from 'electron'
 import {
   playbookFileName,
   type McpDetectedApp
 } from '@shared/mcp'
-import { emitMcpEvent, listStates, saveServer } from './mcp'
+import {
+  ARTCRAFT_APPS,
+  artCraftApp,
+  artCraftBridgeMcpArgs,
+  artCraftBridgePort,
+  artCraftBridgeTokenFile,
+  artCraftControlArgs,
+  artCraftGrantedRoot,
+  artCraftMcpArgs,
+  artCraftPlaybook,
+  artCraftServerMode,
+  artCraftServerName,
+  artCraftTimeoutMs,
+  isArtCraftAppId,
+  sameArtCraftFolder,
+  type ArtCraftAppDef,
+  type ArtCraftAppId,
+  type ArtCraftConnectMode
+} from '@shared/artcraft'
+import { emitMcpEvent, listStates, saveServer, trustServer } from './mcp'
 import { logEvent } from './logger'
 
 /**
@@ -71,7 +92,7 @@ interface BlenderCandidate {
   source: string
 }
 
-function registryBlenderPaths(): BlenderCandidate[] {
+async function registryBlenderPaths(): Promise<BlenderCandidate[]> {
   const found: BlenderCandidate[] = []
   const hives = [
     'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall',
@@ -79,7 +100,7 @@ function registryBlenderPaths(): BlenderCandidate[] {
   ]
   for (const hive of hives) {
     try {
-      const { ok, output } = runRegistry(hive)
+      const { ok, output } = await runRegistry(hive)
       if (!ok) continue
       // Blocks of `DisplayName … Blender` followed by `InstallLocation … <path>`.
       const lines = output.split(/\r?\n/)
@@ -102,28 +123,26 @@ function registryBlenderPaths(): BlenderCandidate[] {
   return found
 }
 
-function runRegistry(hive: string): { ok: boolean; output: string } {
-  // Synchronous here is fine: detection runs on an explicit user action.
-  const { execFileSync } = require('node:child_process') as typeof import('node:child_process')
-  try {
-    const output = execFileSync('reg', ['query', hive, '/s', '/f', 'Blender', '/d'], {
-      timeout: 15000,
-      maxBuffer: 16 * 1024 * 1024,
-      windowsHide: true
-    })
-    return { ok: true, output: output.toString() }
-  } catch (error) {
-    const err = error as { stdout?: Buffer }
-    return { ok: false, output: err.stdout?.toString() ?? '' }
-  }
+function runRegistry(hive: string): Promise<{ ok: boolean; output: string }> {
+  // Asynchronous on purpose: `reg query /s` walks the whole uninstall hive and
+  // takes seconds on a loaded machine. Blocking the main process there froze
+  // the whole window — including the settings page that asked for the scan.
+  return new Promise((resolve) => {
+    execFile(
+      'reg',
+      ['query', hive, '/s', '/f', 'Blender', '/d'],
+      { timeout: 15000, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+      (error, stdout) => resolve({ ok: error === null, output: stdout ?? '' })
+    )
+  })
 }
 
-function programFilesBlenderPaths(): BlenderCandidate[] {
+async function programFilesBlenderPaths(): Promise<BlenderCandidate[]> {
   const found: BlenderCandidate[] = []
   for (const base of ['C:\\Program Files\\Blender Foundation', 'C:\\Program Files (x86)\\Blender Foundation']) {
     try {
       if (!existsSync(base)) continue
-      for (const version of readdirSync(base)) {
+      for (const version of await fsp.readdir(base)) {
         const exe = join(base, version, 'blender.exe')
         if (existsSync(exe)) found.push({ exePath: exe, source: 'program-files' })
       }
@@ -149,12 +168,256 @@ function blenderConfigDir(version: string | null): string | null {
   return existsSync(dir) ? dir : null
 }
 
+/* ---------------------------------------------------------- ArtCraft suite */
+
+/** The launcher is not an MCP app, but it installs every app in the suite. */
+const ARTCRAFT_LAUNCHER_ID = 'artcraft-launcher'
+
+/** The command-line tools the suite should already put on PATH. */
+async function whichAsync(name: string): Promise<string | null> {
+  const finder = process.platform === 'win32' ? 'where' : 'which'
+  const { ok, output } = await run(finder, [name], { timeoutMs: 8000 })
+  if (!ok) return null
+  const first = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0 && existsSync(line))
+  return first ?? null
+}
+
+function firstExisting(paths: string[]): string | null {
+  for (const path of paths) {
+    if (path.length > 0 && existsSync(path)) return path
+  }
+  return null
+}
+
+/** Install folders to try for one app, using the names ArtCraft Launcher uses. */
+function craftInstallDirs(def: ArtCraftAppDef): string[] {
+  const home = app.getPath('home')
+  if (process.platform === 'win32') {
+    const names = [def.label, def.label.replace(/\s+/g, '')]
+    const dirs: string[] = []
+    for (const name of names) {
+      dirs.push(join(home, 'AppData', 'Local', 'Programs', 'ArtCraft', name))
+      dirs.push(join('C:\\Program Files\\ArtCraft', name))
+      dirs.push(join('C:\\Program Files (x86)\\ArtCraft', name))
+    }
+    if (def.id === 'solidcraft') {
+      dirs.push(join('C:\\Program Files', 'SolidCraft'))
+      dirs.push(join(home, 'AppData', 'Local', 'Programs', 'SolidCraft'))
+    }
+    return dirs
+  }
+  if (process.platform === 'darwin') {
+    return [
+      join('/Applications', `${def.label}.app`, 'Contents', 'MacOS', def.label),
+      join(home, 'Applications', `${def.label}.app`, 'Contents', 'MacOS', def.label)
+    ]
+  }
+  return [join('/opt', def.label.toLowerCase(), def.gui), join(home, '.local', 'share', def.label, def.gui)]
+}
+
+function craftCliCandidates(def: ArtCraftAppDef): string[] {
+  const candidates: string[] = []
+  if (process.platform === 'win32') {
+    for (const dir of craftInstallDirs(def)) candidates.push(join(dir, `${def.cli}.exe`))
+  } else {
+    for (const dir of ['/usr/bin', '/usr/local/bin', '/opt/homebrew/bin', join(app.getPath('home'), '.local', 'bin'), join(app.getPath('home'), '.cargo', 'bin')]) {
+      candidates.push(join(dir, def.cli))
+    }
+    for (const dir of craftInstallDirs(def)) candidates.push(join(dir, def.cli))
+  }
+  return candidates
+}
+
+function craftGuiCandidates(def: ArtCraftAppDef): string[] {
+  const candidates: string[] = []
+  for (const dir of craftInstallDirs(def)) {
+    candidates.push(join(dir, process.platform === 'win32' ? `${def.gui}.exe` : def.gui))
+  }
+  return candidates
+}
+
+async function artCraftLauncherPath(): Promise<string | null> {
+  const home = app.getPath('home')
+  const known = firstExisting([
+    join(home, 'AppData', 'Local', 'Programs', 'ArtCraft', 'Launcher', 'artcraft-launcher.exe'),
+    join(home, 'AppData', 'Local', 'Programs', 'ArtCraft Launcher', 'artcraft-launcher.exe'),
+    'C:\\Program Files\\ArtCraft Launcher\\artcraft-launcher.exe',
+    'C:\\Program Files\\ArtCraft\\Launcher\\artcraft-launcher.exe',
+    '/Applications/ArtCraft Launcher.app/Contents/MacOS/artcraft-launcher',
+    '/usr/bin/artcraft-launcher',
+    '/usr/local/bin/artcraft-launcher'
+  ])
+  return known ?? (await whichAsync('artcraft-launcher'))
+}
+
+async function craftCliVersion(cliPath: string): Promise<string | null> {
+  const { ok, output } = await run(cliPath, ['--version'], { timeoutMs: 8000 })
+  if (!ok) return null
+  const line = output
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => entry.length > 0)
+  if (!line) return null
+  const match = /(\d+\.\d+(?:\.\d+)?)/.exec(line)
+  return match ? match[1] : line.slice(0, 60)
+}
+
+/** An ephemeral loopback port for one app's control channel. */
+function freeControlPort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      const port = typeof address === 'object' && address ? address.port : 0
+      server.close(() => (port > 0 ? resolve(port) : reject(new Error('no free port'))))
+    })
+  })
+}
+
+/** True when something already listens on the loopback port. */
+function controlPortOpen(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = new Socket()
+    const done = (value: boolean): void => {
+      socket.removeAllListeners()
+      socket.destroy()
+      resolve(value)
+    }
+    socket.setTimeout(500)
+    socket.once('connect', () => done(true))
+    socket.once('timeout', () => done(false))
+    socket.once('error', () => done(false))
+    socket.connect(port, '127.0.0.1')
+  })
+}
+
+/** Wait until a freshly launched app has opened its control channel. */
+async function waitForControlPort(port: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await controlPortOpen(port)) return true
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+  return controlPortOpen(port)
+}
+
+/**
+ * The bearer-token file for a live connector. PhotoCraft creates it on first
+ * launch (and reuses it later); keeping it under userData means it survives
+ * restarts and never appears on a command line.
+ */
+function artCraftControlTokenFile(id: string): string {
+  const dir = join(app.getPath('userData'), 'artcraft')
+  mkdirSync(dir, { recursive: true })
+  return join(dir, `${id}-control.token`)
+}
+
+/**
+ * Detection cache. Every connector tab fires a scan on mount, and those scans
+ * hit the registry, the filesystem and the app executables — seconds of work
+ * per switch. A short TTL plus in-flight sharing turns tab flapping into
+ * memory reads. `setScan` in the UI forces a fresh scan when the user asks.
+ */
+const DETECT_CACHE_TTL_MS = 30_000
+const detectCache = new Map<string, { at: number; result: McpDetectedApp[] }>()
+const detectInFlight = new Map<string, Promise<McpDetectedApp[]>>()
+
+/** Registration changed what a scan would find — drop the cached answer. */
+function invalidateDetectCache(): void {
+  detectCache.clear()
+}
+
+function detectOnce(key: string, scan: () => Promise<McpDetectedApp[]>): Promise<McpDetectedApp[]> {
+  const cached = detectCache.get(key)
+  if (cached !== undefined && Date.now() - cached.at < DETECT_CACHE_TTL_MS) {
+    return Promise.resolve(cached.result)
+  }
+  const running = detectInFlight.get(key)
+  if (running !== undefined) return running
+  const task = scan()
+    .then((result) => {
+      detectCache.set(key, { at: Date.now(), result })
+      return result
+    })
+    .finally(() => detectInFlight.delete(key))
+  detectInFlight.set(key, task)
+  return task
+}
+
+async function detectArtCraftSuite(only?: string): Promise<McpDetectedApp[]> {
+  if (only === ARTCRAFT_LAUNCHER_ID) {
+    const launcher = await artCraftLauncherPath()
+    if (!launcher) return []
+    return [
+      {
+        app: ARTCRAFT_LAUNCHER_ID,
+        label: 'ArtCraft Launcher',
+        exePath: launcher,
+        version: null,
+        configDir: null,
+        addonInstalled: false
+      }
+    ]
+  }
+
+  const defs = only ? ARTCRAFT_APPS.filter((entry) => entry.id === only) : ARTCRAFT_APPS
+  const found = await Promise.all(
+    defs.map(async (def): Promise<McpDetectedApp | null> => {
+      const cliOnPath = whichAsync(process.platform === 'win32' ? `${def.cli}.exe` : def.cli)
+      const guiOnPath = whichAsync(process.platform === 'win32' ? `${def.gui}.exe` : def.gui)
+      const cliPath = firstExisting([...craftCliCandidates(def), (await cliOnPath) ?? ''])
+      const guiPath = firstExisting([...craftGuiCandidates(def), (await guiOnPath) ?? ''])
+      if (!cliPath && !guiPath) return null
+      const version = cliPath ? await craftCliVersion(cliPath) : null
+      return {
+        app: def.id,
+        label: def.label,
+        exePath: guiPath ?? '',
+        version,
+        configDir: null,
+        addonInstalled: false,
+        cliPath,
+        guiPath,
+        serverName: artCraftServerName(def.id)
+      }
+    })
+  )
+
+  const out = found.filter((entry): entry is McpDetectedApp => entry !== null)
+  if (only) return out
+  const launcher = await artCraftLauncherPath()
+  if (launcher) {
+    out.unshift({
+      app: ARTCRAFT_LAUNCHER_ID,
+      label: 'ArtCraft Launcher',
+      exePath: launcher,
+      version: null,
+      configDir: null,
+      addonInstalled: false
+    })
+  }
+  return out
+}
+
 export async function detectApps(appId: string): Promise<McpDetectedApp[]> {
-  if (appId === 'godot') return detectGodot()
+  if (appId === 'artcraft' || appId === ARTCRAFT_LAUNCHER_ID || isArtCraftAppId(appId)) {
+    const only = appId === 'artcraft' ? undefined : appId
+    return detectOnce(`artcraft:${only ?? 'all'}`, () => detectArtCraftSuite(only))
+  }
+  if (appId === 'godot') {
+    return process.platform === 'win32' ? detectOnce('godot', detectGodot) : []
+  }
   if (appId !== 'blender') return []
   if (process.platform !== 'win32') return []
+  return detectOnce('blender', detectBlender)
+}
 
-  const candidates = [...registryBlenderPaths(), ...programFilesBlenderPaths()]
+async function detectBlender(): Promise<McpDetectedApp[]> {
+  const candidates = [...(await registryBlenderPaths()), ...(await programFilesBlenderPaths())]
   const seen = new Set<string>()
   const unique = candidates.filter((item) => {
     const key = item.exePath.toLowerCase()
@@ -288,37 +551,51 @@ function godotSearchDirs(): string[] {
   ]
 }
 
-function godotExeCandidates(): string[] {
+/**
+ * A depth-3 walk of the home folder is hundreds of milliseconds of synchronous
+ * `readdir` on a good day and minutes on a full drive. It now runs on the
+ * async pool under an entry/time budget, so the window keeps painting while it
+ * works — a missing Godot is better than a frozen one.
+ */
+const GODOT_SCAN_MAX_ENTRIES = 30_000
+const GODOT_SCAN_BUDGET_MS = 4_000
+
+async function godotExeCandidates(): Promise<string[]> {
   const out: string[] = []
   const ignored = new Set(['ElevatedDiagnostics', 'Windows', 'System32', 'Temp'])
-  const visit = (dir: string, depth: number): void => {
-    if (depth > 3 || !existsSync(dir)) return
+  const deadline = Date.now() + GODOT_SCAN_BUDGET_MS
+  let visited = 0
+  const exhausted = (): boolean => visited >= GODOT_SCAN_MAX_ENTRIES || Date.now() > deadline
+  const visit = async (dir: string, depth: number): Promise<void> => {
+    if (depth > 3 || exhausted()) return
     let entries
     try {
-      entries = readdirSync(dir, { withFileTypes: true })
+      entries = await fsp.readdir(dir, { withFileTypes: true })
     } catch {
       // Protected directories (EPERM) are simply skipped.
       return
     }
     for (const entry of entries) {
       if (ignored.has(entry.name)) continue
+      visited += 1
+      if (exhausted()) return
       const full = join(dir, entry.name)
       try {
-        if (entry.isDirectory()) visit(full, depth + 1)
+        if (entry.isDirectory()) await visit(full, depth + 1)
         else if (/^godot.*\.exe$/i.test(entry.name)) out.push(full)
       } catch {
         // One unreadable entry must not kill the whole scan.
       }
     }
   }
-  for (const dir of godotSearchDirs()) visit(dir, 0)
+  for (const dir of godotSearchDirs()) await visit(dir, 0)
   return out
 }
 
-function detectGodot(): McpDetectedApp[] {
+async function detectGodot(): Promise<McpDetectedApp[]> {
   if (process.platform !== 'win32') return []
   const seen = new Set<string>()
-  return godotExeCandidates()
+  return (await godotExeCandidates())
     .filter((exePath) => {
       const key = exePath.toLowerCase()
       if (seen.has(key) || /_console\.exe$|\.tmp$/i.test(exePath)) return false
@@ -337,7 +614,7 @@ function detectGodot(): McpDetectedApp[] {
 
 async function setupGodot(exePath: string | null): Promise<McpSetupResult> {
   setupLine('Setting up the Godot connector …')
-  const resolved = exePath ?? godotExeCandidates()[0] ?? null
+  const resolved = exePath ?? (await godotExeCandidates())[0] ?? null
   if (!resolved || !existsSync(resolved)) {
     const message = 'Godot not found on this computer. Install it, or add the godot server manually with GODOT_PATH set.'
     setupLine(message, 'error')
@@ -345,6 +622,7 @@ async function setupGodot(exePath: string | null): Promise<McpSetupResult> {
   }
   setupLine(`Found Godot: ${resolved}`)
   setupLine('Registering the godot MCP server (it runs via npx and needs Node.js) …')
+  invalidateDetectCache()
   saveServer({
     name: GODOT_SERVER_NAME,
     transport: 'stdio',
@@ -378,6 +656,247 @@ export interface McpSetupResult {
   serverName: string | null
 }
 
+/** Marks a playbook this app generated, as opposed to one the user rewrote. */
+const ARTCRAFT_PLAYBOOK_MARKER = '<!-- relaxcode:artcraft-playbook -->'
+
+/**
+ * Keep the generated playbook in step with the connector mode and folder, but
+ * never overwrite text the user wrote themselves (their copy has no marker).
+ */
+function refreshArtCraftPlaybook(id: ArtCraftAppId, ws: string, mode: ArtCraftConnectMode): void {
+  const serverName = artCraftServerName(id)
+  const existing = getPlaybook(serverName)
+  if (existing === null || existing.includes(ARTCRAFT_PLAYBOOK_MARKER)) {
+    setPlaybook(serverName, artCraftPlaybook(id, ws, mode))
+  }
+}
+
+/**
+ * Registers one Craft app's own MCP server. The CLI ships with the app, so no
+ * runtime has to be installed. A connector is never registered without a
+ * granted folder: a server with no read/write root can list commands but
+ * cannot open, save or export a single file, which is exactly the broken state
+ * users used to hit.
+ *
+ * `headless` starts `<app>-cli mcp` with the workspace as its root.
+ * `live` starts the desktop app with its control channel and roots, then
+ * points the MCP server at that window, so the agent edits the document the
+ * user actually has open.
+ */
+async function setupArtCraft(
+  appId: string,
+  cliPathInput: string | null,
+  workspace: string,
+  mode: ArtCraftConnectMode = 'headless'
+): Promise<McpSetupResult> {
+  const def = artCraftApp(appId)
+  if (!def) return { ok: false, error: 'unknown-app', serverName: null }
+  setupLine(`Setting up the ${def.label} connector …`)
+
+  const ws = workspace.trim()
+  if (ws.length === 0) {
+    const message =
+      `Open a project folder first. The connector grants that folder to ${def.label} so the agent can open, save and export files; without it every file operation is refused.`
+    setupLine(message, 'error')
+    return { ok: false, error: 'no-workspace', serverName: null }
+  }
+  if (!existsSync(ws)) {
+    const message = `The project folder does not exist: ${ws}. Open an existing folder and connect the connector again.`
+    setupLine(message, 'error')
+    return { ok: false, error: 'workspace-missing', serverName: null }
+  }
+
+  const manual = cliPathInput?.trim() ?? ''
+  const cliPath =
+    manual.length > 0 && existsSync(manual) ? manual : firstExisting(craftCliCandidates(def))
+  if (!cliPath) {
+    const message = `${def.label} is not installed (its MCP server ships as ${def.cli}). Install it with ArtCraft Launcher from ${def.site} and run the detection again.`
+    setupLine(message, 'error')
+    return { ok: false, error: message, serverName: null }
+  }
+  setupLine(`Found ${def.cli}: ${cliPath}`)
+
+  // PhotoCraft's AppImage offers the same CLI through a global --cli switch.
+  const prefix =
+    process.platform !== 'win32' && def.id === 'photocraft' && /\.AppImage$/i.test(cliPath)
+      ? ['--cli']
+      : []
+  const serverName = artCraftServerName(def.id)
+  let args: string[]
+
+  // A re-grant or a mode switch runs the same executable the user already
+  // approved. Keep that trust decision: only the folder and the flags change,
+  // and the new command line is visible in the card. Without this the server
+  // silently lands untrusted, the Connect button stays disabled, and pressing
+  // "Connect" looks like nothing happens.
+  const previous = listStates().find((entry) => entry.config.name === serverName)
+  const sameExe =
+    previous !== undefined &&
+    (process.platform === 'win32'
+      ? previous.config.command.trim().toLowerCase() === cliPath.trim().toLowerCase()
+      : previous.config.command.trim() === cliPath.trim())
+  const keepTrust = sameExe && previous?.config.trusted === true
+
+  if (mode === 'live') {
+    if (!def.bridge) {
+      const message = `${def.label} does not expose a live control channel; connect it in headless mode instead.`
+      setupLine(message, 'error')
+      return { ok: false, error: 'live-unsupported', serverName: null }
+    }
+    const guiPath = firstExisting(craftGuiCandidates(def))
+    if (!guiPath) {
+      const message = `The ${def.label} desktop app was not found, so the live connector cannot start it. Install the app from ${def.site}, then try again.`
+      setupLine(message, 'error')
+      return { ok: false, error: 'gui-not-found', serverName: null }
+    }
+
+    let port: number
+    try {
+      port = await freeControlPort()
+    } catch {
+      const message = 'Could not reserve a loopback port for the live control channel.'
+      setupLine(message, 'error')
+      return { ok: false, error: 'no-port', serverName: null }
+    }
+    const tokenFile = artCraftControlTokenFile(def.id)
+    setupLine(`Starting ${def.label} with the live control channel on 127.0.0.1:${port} …`)
+    let child: ReturnType<typeof spawn> | null = null
+    try {
+      child = spawn(guiPath, artCraftControlArgs(def.id, port, tokenFile, ws), {
+        cwd: ws,
+        detached: true,
+        stdio: 'ignore'
+      })
+      child.once('error', (error) => {
+        setupLine(`${def.label} did not start: ${error.message}`, 'error')
+      })
+      child.unref()
+    } catch (error) {
+      const message = `${def.label} did not start: ${error instanceof Error ? error.message : String(error)}`
+      setupLine(message, 'error')
+      return { ok: false, error: message, serverName: null }
+    }
+    // Do not report success until the window actually answers: a config saved
+    // against a silent port is a connector that can never connect, which looks
+    // exactly like "the button does nothing".
+    if (!(await waitForControlPort(port, 30000))) {
+      try {
+        child?.kill()
+      } catch {
+        // The process may already be gone.
+      }
+      const message = `${def.label} opened, but its control channel did not answer on 127.0.0.1:${port} within 30 s. Close any other ${def.label} windows you started yourself and try again.`
+      setupLine(message, 'error')
+      return { ok: false, error: 'control-port-timeout', serverName: null }
+    }
+    setupLine(`${def.label} is up and listening on 127.0.0.1:${port}.`)
+    args = [...prefix, ...artCraftBridgeMcpArgs(def.id, port, tokenFile)]
+  } else {
+    args = [...prefix, ...artCraftMcpArgs(def.id, ws)]
+  }
+
+  setupLine(`Registering the ${serverName} MCP server (${mode}) …`)
+  invalidateDetectCache()
+  saveServer({
+    name: serverName,
+    transport: 'stdio',
+    command: cliPath,
+    args,
+    env: {},
+    cwd: ws,
+    url: '',
+    enabled: true,
+    trusted: false,
+    defaultRisk: 'exec',
+    // The command registry and document inspection are safe to run without a
+    // separate confirmation; everything else keeps the server's default risk.
+    toolRisk: {
+      command_list: 'read',
+      list_commands: 'read',
+      doc_inspect: 'read',
+      inspect_document: 'read',
+      read_range: 'read',
+      evaluate_formula: 'read',
+      ui_inspect: 'read',
+      session_list: 'read',
+      jobs_list: 'read'
+    },
+    disabledTools: [],
+    timeoutMs: artCraftTimeoutMs(def.id)
+  })
+  // The same executable, only a new folder/mode: the user's earlier approval
+  // still stands, and the server stays connectable in one click.
+  if (keepTrust) trustServer(serverName)
+  // Re-point the generated playbook at the current project and mode, but never
+  // overwrite one the user has rewritten (the template carries a marker).
+  refreshArtCraftPlaybook(def.id, ws, mode)
+  setupLine(
+    keepTrust
+      ? `Done. ${def.label} is reconnected to the open folder${mode === 'live' ? ' in the live window' : ''}.`
+      : `Done. Trust the ${serverName} server and connect it; the agent can then drive ${def.label}${mode === 'live' ? ' in the live window' : ''}.`
+  )
+  return { ok: true, error: null, serverName }
+}
+
+/**
+ * Before connecting a Craft app, make sure its registered folder is the one
+ * that is open now. Older RelaxCode versions could register a server with no
+ * root at all, and switching projects leaves the previous folder behind; in
+ * both cases the server connects, lists its tools, and then refuses every
+ * doc_open/doc_save. Re-pointing the server here (same mode, same executable)
+ * makes the "Connect" button produce a usable connector again. The trust
+ * decision is kept because the user already approved this exact program and
+ * the new root only narrows what it can touch.
+ */
+export async function prepareArtCraftForWorkspace(
+  name: string,
+  workspace: string
+): Promise<{ ok: boolean; error: string | null; changed: boolean }> {
+  if (!isArtCraftAppId(name)) return { ok: true, error: null, changed: false }
+  const def = artCraftApp(name)
+  if (!def) return { ok: true, error: null, changed: false }
+  const state = listStates().find((entry) => entry.config.name === name)
+  if (!state) return { ok: true, error: null, changed: false }
+
+  const ws = workspace.trim()
+  const roots = def.roots !== 'none'
+  const mode = artCraftServerMode(state.config.args)
+  const current =
+    mode === 'live' || !roots
+      ? state.config.cwd.trim()
+      : (artCraftGrantedRoot(def.id, state.config.args) ?? '')
+
+  if (current.length > 0 && sameArtCraftFolder(current, ws)) {
+    // The root is fine, but the generated playbook may come from an older
+    // RelaxCode that did not warn about headless sessions.
+    refreshArtCraftPlaybook(def.id, ws, mode)
+    return { ok: true, error: null, changed: false }
+  }
+  if (ws.length === 0) {
+    if (!roots) return { ok: true, error: null, changed: false }
+    return {
+      ok: false,
+      error: `Open a project folder first: ${def.label} needs a folder it may read and write.`,
+      changed: false
+    }
+  }
+
+  const wasTrusted = state.config.trusted
+  const result = await setupArtCraft(def.id, state.config.command, ws, mode)
+  if (!result.ok) {
+    const error =
+      result.error === 'no-workspace'
+        ? `Open a project folder first: ${def.label} needs a folder it may read and write.`
+        : result.error === 'workspace-missing'
+          ? `The project folder no longer exists: ${ws}. Open an existing folder and connect again.`
+          : result.error
+    return { ok: false, error, changed: false }
+  }
+  if (wasTrusted) trustServer(name)
+  setupLine(`Reconnected ${def.label} to the open project folder: ${ws}`)
+  return { ok: true, error: null, changed: true }
+}
+
 async function setupBlender(): Promise<McpSetupResult> {
   setupLine('Setting up the Blender connector …')
   let python: string
@@ -398,6 +917,8 @@ async function setupBlender(): Promise<McpSetupResult> {
   }
 
   setupLine('Registering the blender MCP server (it stays untrusted until you confirm) …')
+  // The addon just landed on disk: the cached scan still says "not installed".
+  invalidateDetectCache()
   saveServer({
     name: BLENDER_SERVER_NAME,
     transport: 'stdio',
@@ -423,17 +944,65 @@ async function setupBlender(): Promise<McpSetupResult> {
   return { ok: true, error: null, serverName: BLENDER_SERVER_NAME }
 }
 
-export function setupConnector(appId: string, exePath?: string): Promise<McpSetupResult> {
+export function setupConnector(
+  appId: string,
+  exePath?: string,
+  workspace = '',
+  mode: ArtCraftConnectMode = 'headless'
+): Promise<McpSetupResult> {
   if (appId === 'blender') return setupBlender()
   if (appId === 'godot') return setupGodot(exePath ?? null)
+  if (isArtCraftAppId(appId)) return setupArtCraft(appId, exePath ?? null, workspace, mode)
   return Promise.resolve({ ok: false, error: 'unknown-app', serverName: null })
 }
 
-/** Launches the app with its MCP server auto-started (Blender: GUI + --python). */
-export function launchApp(appId: string, exePath: string): { ok: boolean; error: string | null } {
-  if (appId !== 'blender') return { ok: false, error: 'unknown-app' }
+/**
+ * Launches a desktop app. For a live ArtCraft connector the launch repeats the
+ * exact control-channel arguments from its registered server, so restarting
+ * PhotoCraft from Settings reconnects the agent to the window it drives; a
+ * plain launch or a headless connector opens the app normally.
+ */
+export async function launchApp(
+  appId: string,
+  exePath: string
+): Promise<{ ok: boolean; error: string | null }> {
+  if (appId !== 'blender' && appId !== ARTCRAFT_LAUNCHER_ID && !isArtCraftAppId(appId)) {
+    return { ok: false, error: 'unknown-app' }
+  }
   if (!existsSync(exePath)) return { ok: false, error: 'app-not-found' }
   try {
+    if (isArtCraftAppId(appId)) {
+      const def = artCraftApp(appId)
+      const config = listStates().find((state) => state.name === artCraftServerName(appId))?.config
+      if (def?.bridge && config && artCraftServerMode(config.args) === 'live') {
+        const port = artCraftBridgePort(config.args)
+        const tokenFile = artCraftBridgeTokenFile(config.args)
+        const root = config.cwd.trim()
+        if (port && tokenFile && root.length > 0 && existsSync(root)) {
+          if (await controlPortOpen(port)) {
+            setupLine(`${def.label} is already running with the live connector on 127.0.0.1:${port}.`)
+            return { ok: true, error: null }
+          }
+          const child = spawn(exePath, artCraftControlArgs(appId, port, tokenFile, root), {
+            cwd: root,
+            detached: true,
+            stdio: 'ignore'
+          })
+          child.once('error', (error) => {
+            setupLine(`${def.label} did not start: ${error.message}`, 'error')
+          })
+          child.unref()
+          setupLine(`Launched ${exePath} with the live control channel on 127.0.0.1:${port}.`)
+          return { ok: true, error: null }
+        }
+      }
+    }
+    if (appId === ARTCRAFT_LAUNCHER_ID || isArtCraftAppId(appId)) {
+      const child = spawn(exePath, [], { detached: true, stdio: 'ignore' })
+      child.unref()
+      setupLine(`Launched ${exePath}.`)
+      return { ok: true, error: null }
+    }
     const script = join(app.getPath('userData'), 'blender-mcp-start.py')
     writeFileSync(
       script,

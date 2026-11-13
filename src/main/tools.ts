@@ -27,6 +27,7 @@ import { CHECK_TOOLS } from './tools-check'
 import { OBSERVE_TOOLS } from './tools-observe'
 import { SCREEN_TOOLS } from './tools-screen'
 import { DATA_TOOLS } from './tools-data'
+import { ASSET_TOOLS } from './tools-assets'
 import { PROJECT_TOOLS } from './tools-project'
 import { UI_TOOLS } from './tools-ui'
 import { SCHEDULE_TOOLS } from './tools-schedule'
@@ -1598,6 +1599,7 @@ export const TOOLS: ToolDef[] = [
   ...OBSERVE_TOOLS,
   ...SCREEN_TOOLS,
   ...DATA_TOOLS,
+  ...ASSET_TOOLS,
   ...PROJECT_TOOLS,
   ...UI_TOOLS,
   ...SCHEDULE_TOOLS,
@@ -1848,6 +1850,13 @@ const TOOL_ALIASES: Record<string, string> = {
   pdf: 'read_pdf',
   download: 'download_file',
   wget: 'download_file',
+  downloadasset: 'download_asset',
+  fetchasset: 'download_asset',
+  getasset: 'download_asset',
+  inspectimage: 'inspect_image',
+  imageinfo: 'inspect_image',
+  analyseimage: 'inspect_image',
+  analyzeimage: 'inspect_image',
   db: 'db_query',
   sql: 'db_query',
   // project understanding

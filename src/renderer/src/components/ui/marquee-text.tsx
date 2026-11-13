@@ -31,7 +31,15 @@ export function MarqueeText({ children, className }: MarqueeTextProps): JSX.Elem
     update()
     const observer = new ResizeObserver(update)
     observer.observe(box)
-    return () => observer.disconnect()
+    // Rows far down a long list skip layout until they are scrolled to
+    // (`content-visibility`), so the first measurement can read zeros. Measure
+    // again as soon as the row is revealed.
+    const revealed = new IntersectionObserver(update, { rootMargin: '160px' })
+    revealed.observe(box)
+    return () => {
+      observer.disconnect()
+      revealed.disconnect()
+    }
   }, [children])
 
   return (

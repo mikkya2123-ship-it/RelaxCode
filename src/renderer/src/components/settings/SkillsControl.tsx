@@ -15,13 +15,23 @@ import { cn } from '@/lib/utils'
  * built-in text for that skill only; "вернуть стандарт" drops the override.
  */
 
-const CATEGORIES: SkillCategory[] = ['web', 'ui', 'graphics', 'three-d', 'content']
+const CATEGORIES: SkillCategory[] = [
+  'web',
+  'ui',
+  'graphics',
+  'three-d',
+  'godot',
+  'blender',
+  'content'
+]
 
 const CATEGORY_LABELS: Record<SkillCategory, string> = {
   web: 'settings.skills.category.web',
   ui: 'settings.skills.category.ui',
   graphics: 'settings.skills.category.graphics',
   'three-d': 'settings.skills.category.three-d',
+  godot: 'settings.skills.category.godot',
+  blender: 'settings.skills.category.blender',
   content: 'settings.skills.category.content'
 }
 

@@ -12,7 +12,22 @@
  * the workspace context.
  */
 
-export type SkillCategory = 'web' | 'ui' | 'graphics' | 'three-d' | 'content'
+import { WEB_SKILLS } from './skill-library/web.ts'
+import { UI_SKILLS } from './skill-library/ui.ts'
+import { GRAPHICS_SKILLS } from './skill-library/graphics.ts'
+import { THREE_D_SKILLS } from './skill-library/three-d.ts'
+import { GODOT_SKILLS } from './skill-library/godot.ts'
+import { BLENDER_SKILLS } from './skill-library/blender.ts'
+import { CONTENT_SKILLS } from './skill-library/content.ts'
+
+export type SkillCategory =
+  | 'web'
+  | 'ui'
+  | 'graphics'
+  | 'three-d'
+  | 'godot'
+  | 'blender'
+  | 'content'
 
 export interface Skill {
   id: string
@@ -28,7 +43,8 @@ export interface Skill {
   rules: string[]
 }
 
-export const SKILLS: readonly Skill[] = [
+/** The original playbooks: general design craft, kept first for tie-breaking. */
+const BASE_SKILLS: readonly Skill[] = [
   {
     id: 'ai-landing',
     title: 'Лендинг AI-продукта',
@@ -447,7 +463,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'blender-modeling',
     title: 'Моделинг в Blender',
     titleEn: 'Blender modelling',
-    category: 'three-d',
+    category: 'blender',
     summary: 'Реальный масштаб, чистая топология, bevel и лишний вес',
     summaryEn: 'Real scale, clean topology, bevelled edges, controlled polycount',
     triggers: ['blender', 'моделинг', 'modeling', '3д модель', '3d model', 'меш', 'mesh editing', 'скульпт', 'sculpt'],
@@ -467,7 +483,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'blender-render',
     title: 'Свет и рендер в Blender',
     titleEn: 'Blender lighting and render',
-    category: 'three-d',
+    category: 'blender',
     summary: 'Трёхточечный свет, HDRI, композиция и денойз',
     summaryEn: 'Three-point rig, HDRI, composition, denoise',
     triggers: ['рендер', 'render', 'освещен', 'lighting setup', 'cycles', 'eevee', 'hdri', 'студийный свет'],
@@ -586,7 +602,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-gdscript',
     title: 'Godot: GDScript',
     titleEn: 'Godot: GDScript',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Типизация, жизненный цикл нод, сигналы и await по канонам Godot 4',
     summaryEn: 'Типизация, жизненный цикл нод, сигналы и await по канонам Godot 4',
     triggers: [
@@ -619,7 +635,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-physics',
     title: 'Godot: физика',
     titleEn: 'Godot: physics',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Типы тел, слои коллизий, рейкасты, Jolt в 3D',
     summaryEn: 'Типы тел, слои коллизий, рейкасты, Jolt в 3D',
     triggers: [
@@ -655,7 +671,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-3d-essentials',
     title: 'Godot: 3D-основы',
     titleEn: 'Godot: 3D essentials',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Ноды, трансформации, окружение и свет в 3D',
     summaryEn: 'Ноды, трансформации, окружение и свет в 3D',
     triggers: [
@@ -687,7 +703,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-nodes-scenes',
     title: 'Godot: ноды и сцены',
     titleEn: 'Godot: nodes and scenes',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Дерево, инстансинг PackedScene, композиция сцен',
     summaryEn: 'Дерево, инстансинг PackedScene, композиция сцен',
     triggers: [
@@ -721,7 +737,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-animation',
     title: 'Godot: анимация',
     titleEn: 'Godot: animation',
-    category: 'three-d',
+    category: 'godot',
     summary: 'AnimationPlayer, Tween, таймлайны и game feel',
     summaryEn: 'AnimationPlayer, Tween, таймлайны и game feel',
     triggers: [
@@ -753,7 +769,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-audio',
     title: 'Godot: звук',
     titleEn: 'Godot: audio',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Шины, AudioStreamPlayer, позиционирование и баланс',
     summaryEn: 'Шины, AudioStreamPlayer, позиционирование и баланс',
     triggers: [
@@ -785,7 +801,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-resources',
     title: 'Godot: ресурсы',
     titleEn: 'Godot: resources',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Resource-паттерны: данные, инвентари, настройки башен',
     summaryEn: 'Resource-паттерны: данные, инвентари, настройки башен',
     triggers: [
@@ -817,7 +833,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-gdscript-headless-testing',
     title: 'Godot: headless-тесты',
     titleEn: 'Godot: headless testing',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Прогон и проверка проекта без открытия редактора',
     summaryEn: 'Прогон и проверка проекта без открытия редактора',
     triggers: [
@@ -849,7 +865,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-export',
     title: 'Godot: экспорт',
     titleEn: 'Godot: export',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Пресеты экспорта и сборка из командной строки',
     summaryEn: 'Пресеты экспорта и сборка из командной строки',
     triggers: [
@@ -881,7 +897,7 @@ export const SKILLS: readonly Skill[] = [
     id: 'godot-2d-movement',
     title: 'Godot: 2D-движение',
     titleEn: 'Godot: 2D movement',
-    category: 'three-d',
+    category: 'godot',
     summary: 'Контроллеры персонажей и движение в 2D',
     summaryEn: 'Контроллеры персонажей и движение в 2D',
     triggers: [
@@ -909,6 +925,22 @@ export const SKILLS: readonly Skill[] = [
       'Slope slipping while idle: keep \'floor_stop_on_slope = true\' (default) and raise \'floor_snap_length\' (default 1 px) so the body sticks to downward',
     ]
   }
+]
+
+/**
+ * The whole library. The packs are independent files so the catalog can grow
+ * without one unreadable 5000-line module; order only matters for tie-breaking
+ * in the selector, so the broadest craft skills stay at the front.
+ */
+export const SKILLS: readonly Skill[] = [
+  ...BASE_SKILLS,
+  ...WEB_SKILLS,
+  ...UI_SKILLS,
+  ...GRAPHICS_SKILLS,
+  ...THREE_D_SKILLS,
+  ...GODOT_SKILLS,
+  ...BLENDER_SKILLS,
+  ...CONTENT_SKILLS
 ]
 
 /** The skill with this id, or null when it is unknown (old chats, renamed skills). */

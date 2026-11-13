@@ -18,6 +18,7 @@ import {
   Pencil,
   Ruler,
   Search,
+  Sparkles,
   Table as TableIcon,
   Terminal,
   Timer,
@@ -87,6 +88,8 @@ function iconFor(name: string): LucideIcon {
       return ImageIcon
     case 'draw_figure':
       return Ruler
+    case 'use_skill':
+      return Sparkles
     default:
       return FileText
   }
@@ -96,7 +99,7 @@ function previewText(part: ToolPart): string {
   if (part.status !== 'running' && part.summary) return part.summary
   try {
     const args = JSON.parse(part.args) as Record<string, unknown>
-    for (const key of ['path', 'command', 'pattern', 'query', 'url', 'question', 'from']) {
+    for (const key of ['path', 'command', 'pattern', 'query', 'url', 'question', 'from', 'id']) {
       const value = args[key]
       if (typeof value === 'string' && value.length > 0) return value.slice(0, 160)
     }

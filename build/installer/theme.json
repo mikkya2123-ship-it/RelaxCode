@@ -1,0 +1,107 @@
+{
+  "$doc": "Источник правды кастомного установщика. Правьте цвета/тексты здесь и запускайте `npm run installer:assets` — скрипт перегенерирует BMP-ассеты, theme.nsh и PNG-превью в build/installer/preview/.",
+  "window": { "width": 960, "height": 640, "barHeight": 76, "margin": 24, "contentMargin": 48 },
+  "colors": {
+    "bg": "#17171a",
+    "bgArtTop": "#1d1d21",
+    "bgArtBottom": "#17171a",
+    "panel": "#1b1b1f",
+    "card": "#1d1d21",
+    "cardSelected": "#1e2229",
+    "secondary": "#26262b",
+    "input": "#1d1d21",
+    "inputBorder": "#33333a",
+    "border": "#2e2e34",
+    "fg": "#ececf0",
+    "fgOnAccent": "#1a1a1d",
+    "muted": "#9a9aa2",
+    "tertiary": "#74747e",
+    "accent": "#6ea8ff",
+    "accentGlow": "#7a6eff",
+    "success": "#58c07c",
+    "destructive": "#e5484d",
+    "glassTop": "#ffffff"
+  },
+  "fonts": {
+    "file": "fonts/Manrope.ttf",
+    "regular": "Manrope",
+    "medium": "Manrope Medium",
+    "semibold": "Manrope SemiBold"
+  },
+  "buttons": {
+    "width": 150,
+    "height": 46,
+    "bigWidth": 300,
+    "bigHeight": 56,
+    "smallWidth": 112,
+    "radius": 12
+  },
+  "progress": { "height": 6, "radius": 3 },
+  "texts": {
+    "welcome": {
+      "titleLines": {
+        "ru": ["Добро пожаловать", "в RelaxCode"],
+        "en": ["Welcome to", "RelaxCode"]
+      },
+      "subLines": {
+        "ru": ["Настольная IDE с ИИ-агентом: файлы и команды,", "интернет, схемы и 3D — в одном окне."],
+        "en": ["A desktop IDE with an AI agent: files and", "commands, web, diagrams and 3D — one window."]
+      },
+      "features": {
+        "ru": ["Файловый explorer и редактор Monaco", "ИИ-агент: 20+ инструментов и MCP", "Blender, ArtCraft и другие приложения"],
+        "en": ["File explorer and Monaco editor", "AI agent: 20+ tools and MCP", "Blender, ArtCraft and more apps"]
+      }
+    },
+    "license": {
+      "title": { "ru": "Лицензионное соглашение", "en": "License Agreement" },
+      "sub": {
+        "ru": "Пожалуйста, прочитайте условия перед установкой.",
+        "en": "Please read the terms before installing."
+      },
+      "accept": {
+        "ru": "Я принимаю условия лицензионного соглашения",
+        "en": "I accept the license agreement"
+      }
+    },
+    "dir": {
+      "title": { "ru": "Папка установки", "en": "Installation Folder" },
+      "sub": { "ru": "Выберите режим установки и папку.", "en": "Choose install mode and folder." },
+      "userTitle": { "ru": "Только для меня", "en": "Just for me" },
+      "userSub": { "ru": "Установка в профиль вашей учётной записи", "en": "Installs into your user profile" },
+      "allTitle": { "ru": "Для всех пользователей", "en": "For all users" },
+      "allSub": { "ru": "Потребуются права администратора", "en": "Administrator rights required" },
+      "pathLabel": { "ru": "Папка:", "en": "Folder:" }
+    },
+    "install": {
+      "title": { "ru": "Устанавливаем RelaxCode…", "en": "Installing RelaxCode…" }
+    },
+    "finish": {
+      "title": { "ru": "Готово!", "en": "All done!" },
+      "sub": {
+        "ru": "RelaxCode установлен. Приятной работы!",
+        "en": "RelaxCode has been installed. Enjoy!"
+      }
+    },
+    "unconfirm": {
+      "title": { "ru": "Удалить RelaxCode?", "en": "Uninstall RelaxCode?" },
+      "subLines": {
+        "ru": ["Приложение и его компоненты будут удалены", "с этого компьютера."],
+        "en": ["The application and its components", "will be removed from this computer."]
+      }
+    },
+    "unfinish": {
+      "title": { "ru": "RelaxCode удалён", "en": "RelaxCode was removed" },
+      "sub": { "ru": "Спасибо, что пользовались RelaxCode.", "en": "Thanks for using RelaxCode." }
+    },
+    "buttons": {
+      "next": { "ru": "Далее", "en": "Next" },
+      "back": { "ru": "Назад", "en": "Back" },
+      "cancel": { "ru": "Отмена", "en": "Cancel" },
+      "install": { "ru": "Установить", "en": "Install" },
+      "finish": { "ru": "Готово", "en": "Done" },
+      "uninstall": { "ru": "Удалить", "en": "Uninstall" },
+      "launch": { "ru": "Запустить RelaxCode", "en": "Launch RelaxCode" },
+      "browse": { "ru": "Обзор", "en": "Browse" }
+    }
+  }
+}

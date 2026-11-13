@@ -1,10 +1,30 @@
 import type { JSX } from 'react'
 import darkLogo from '@/assets/app-logo-dark.png'
 import lightLogo from '@/assets/app-logo-light.png'
+import mascot from '@/assets/app-mascot.svg'
 import { cn } from '@/lib/utils'
 
 interface AppLogoProps {
   className?: string
+}
+
+export function AppMascot({ className }: AppLogoProps): JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('inline-block shrink-0 bg-foreground', className)}
+      style={{
+        WebkitMaskImage: `url(${mascot})`,
+        WebkitMaskPosition: 'center',
+        WebkitMaskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        maskImage: `url(${mascot})`,
+        maskPosition: 'center',
+        maskRepeat: 'no-repeat',
+        maskSize: 'contain'
+      }}
+    />
+  )
 }
 
 /**

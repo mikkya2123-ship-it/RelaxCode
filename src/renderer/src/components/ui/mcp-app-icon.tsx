@@ -1,5 +1,7 @@
 import { type JSX } from 'react'
 import { cn } from '@/lib/utils'
+import { ARTCRAFT_APPS } from '@shared/artcraft'
+import { ArtCraftAppIcon } from './artcraft-icon'
 
 /**
  * Plain brand glyphs for the known MCP companion apps, straight from the
@@ -61,6 +63,13 @@ function appKey(name: string): string {
 }
 
 export function McpAppIcon({ name, className }: { name: string; className?: string }): JSX.Element {
+  // ArtCraft servers keep their official app icon on the cards, not initials.
+  const normalized = name.toLowerCase().replace(/\s+/g, '')
+  const craft = ARTCRAFT_APPS.find(
+    (app) => app.id === normalized || app.label.toLowerCase().replace(/\s+/g, '') === normalized
+  )
+  if (craft) return <ArtCraftAppIcon app={craft.id} className={className} />
+
   const key = appKey(name)
 
   // A known app: the plain official glyph in its brand colour.

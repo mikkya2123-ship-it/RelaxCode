@@ -358,10 +358,17 @@ export type McpEvent =
 export interface McpDetectedApp {
   app: string
   label: string
+  /** Desktop executable for Blender/Godot; for Craft apps the GUI binary. */
   exePath: string
   version: string | null
   /** Per-user config folder of this install (null when never launched). */
   configDir: string | null
   /** The connector's addon/plugin is already in the config folder. */
   addonInstalled: boolean
+  /** Craft apps: the `<app>-cli` binary that runs the MCP server. */
+  cliPath?: string | null
+  /** Craft apps: the GUI binary (may be missing when only the CLI is installed). */
+  guiPath?: string | null
+  /** Craft apps: the mcp.json server name this app registers. */
+  serverName?: string
 }

@@ -328,6 +328,17 @@ export interface AdvancedSettings {
   proxyUrl: string
 }
 
+/**
+ * Who the assistant is talking to. The name greets the user on the empty chat
+ * screen; the notes are handed to the model with every request, so it knows the
+ * person's stack, language habits and standing instructions without repeating
+ * them in each conversation.
+ */
+export interface ProfileSettings {
+  name: string
+  about: string
+}
+
 export interface KeymapSettings {
   toggleSidebar: string
   toggleChat: string
@@ -363,10 +374,15 @@ export interface SettingsValues {
   notifications: NotificationSettings
   advanced: AdvancedSettings
   keymap: KeymapSettings
+  profile: ProfileSettings
 }
 
 export const DEFAULT_SETTINGS: SettingsValues = {
   approvalMode: 'ask',
+  profile: {
+    name: '',
+    about: ''
+  },
   skills: DEFAULT_SKILLS_SETTINGS,
   agent: {
     temperature: 0.2,
@@ -650,6 +666,7 @@ export interface SettingsPatch {
   notifications?: Partial<NotificationSettings>
   advanced?: Partial<AdvancedSettings>
   keymap?: Partial<KeymapSettings>
+  profile?: Partial<ProfileSettings>
 }
 
 /** What the renderer receives: everything except secrets. */

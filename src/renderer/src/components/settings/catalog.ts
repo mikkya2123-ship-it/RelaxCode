@@ -20,6 +20,7 @@ import {
 
 export type SectionId =
   | 'connection'
+  | 'profile'
   | 'skills'
   | 'agent'
   | 'tools'
@@ -43,6 +44,7 @@ export interface SectionDef {
 
 export const SECTIONS: SectionDef[] = [
   { id: 'connection', label: 'settings.section.connection', icon: 'plug' },
+  { id: 'profile', label: 'settings.section.profile', icon: 'user' },
   { id: 'skills', label: 'settings.section.skills', icon: 'sparkles' },
   { id: 'agent', label: 'settings.section.agent', icon: 'bot' },
   { id: 'tools', label: 'settings.section.tools', icon: 'wrench' },
@@ -115,6 +117,29 @@ export const SETTINGS_CATALOG: SettingDef[] = [
     hint: 'settings.providers.hint',
     control: { kind: 'providers' },
     keywords: 'api key ключ endpoint base url провайдер модель'
+  },
+
+  // -------------------------------------------------------------------- profile
+  {
+    id: 'profile.name',
+    section: 'profile',
+    group: 'profile',
+    key: 'name',
+    label: 'settings.profile.name',
+    hint: 'settings.profile.name.hint',
+    control: { kind: 'text' },
+    keywords: 'имя пользователя обращение name how to call me приветствие'
+  },
+  {
+    id: 'profile.about',
+    section: 'profile',
+    group: 'profile',
+    key: 'about',
+    label: 'settings.profile.about',
+    hint: 'settings.profile.about.hint',
+    control: { kind: 'textarea', rows: 7 },
+    keywords:
+      'о себе контекст инструкции профиль стек предпочтения about me persona standing instructions'
   },
 
   // ---------------------------------------------------------------------- agent

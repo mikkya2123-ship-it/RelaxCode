@@ -1,11 +1,10 @@
 {
   "name": "relaxcode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "RelaxCode — AI-powered IDE",
   "main": "./out/main/index.js",
   "author": {
-    "name": "Misha",
-    "email": "misha@localhost"
+    "name": "RelaxCode"
   },
   "license": "MIT",
   "private": true,
@@ -14,7 +13,9 @@
     "start": "electron-vite preview",
     "build": "electron-vite build",
     "icon": "node scripts/make-icon.mjs",
+    "installer:assets": "node scripts/build-installer-assets.mjs",
     "dist": "npm run build && electron-builder --win",
+    "release": "node scripts/release.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
@@ -38,6 +39,7 @@
     "test:websearch": "node scripts/web-search.test.mjs",
     "test:figures": "node scripts/figures.test.mjs",
     "test:visuals": "node scripts/visuals.test.mjs",
+    "test:assets": "node scripts/assets.test.mjs",
     "test:attachments": "node scripts/attachments.test.mjs",
     "test:agenttools": "node scripts/agent-tools.test.mjs",
     "test:diff": "node scripts/diff.test.mjs",
@@ -46,7 +48,9 @@
     "test:exchange-log": "node scripts/exchange-log.test.mjs",
     "test:call-loop": "node scripts/call-loop.test.mjs",
     "test:skills": "node scripts/skills.test.mjs",
-    "test": "npm run test:parser && npm run test:url && npm run test:reasoning && npm run test:repetition && npm run test:memory && npm run test:markdown && npm run test:recipes && npm run test:mcp && npm run test:backup && npm run test:proc && npm run test:terminal && npm run test:bg && npm run test:saving && npm run test:entries && npm run test:websearch && npm run test:figures && npm run test:visuals && npm run test:attachments && npm run test:diff && npm run test:agenttools && npm run test:language && npm run test:i18n && npm run test:exchange-log && npm run test:call-loop && npm run test:skills"
+    "test:updater": "node scripts/updater.test.mjs",
+    "test:installer": "node scripts/installer-assets.test.mjs",
+    "test": "npm run test:parser && npm run test:url && npm run test:reasoning && npm run test:repetition && npm run test:memory && npm run test:markdown && npm run test:recipes && npm run test:mcp && npm run test:backup && npm run test:proc && npm run test:terminal && npm run test:bg && npm run test:saving && npm run test:entries && npm run test:websearch && npm run test:figures && npm run test:visuals && npm run test:assets && npm run test:attachments && npm run test:diff && npm run test:agenttools && npm run test:language && npm run test:i18n && npm run test:exchange-log && npm run test:call-loop && npm run test:skills && npm run test:updater && npm run test:installer"
   },
   "devDependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
@@ -85,6 +89,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "chokidar": "^5.0.0",
+    "electron-updater": "^6.8.11",
     "motion": "^14.7.1",
     "openai": "^7.36.0"
   },
@@ -123,7 +128,23 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico",
-      "license": "build/license.txt"
-    }
+      "warningsAsErrors": false,
+      "license": "build/license.txt",
+      "installerLanguages": [
+        "ru_RU",
+        "en_US"
+      ],
+      "language": "1049",
+      "displayLanguageSelector": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mikkya2123-ship-it",
+        "repo": "RelaxCode",
+        "releaseType": "draft"
+      }
+    ]
   }
 }

@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { memo, type JSX } from 'react'
 import { FilePlus, FileText, MoveRight, Pencil, Trash2, X, type LucideIcon } from 'lucide-react'
 import { parseFeedLine, type FeedEventKind } from '@shared/terminal-feed'
 import { cn } from '@/lib/utils'
@@ -38,7 +38,12 @@ function OutputRow({ text }: { text: string }): JSX.Element {
   )
 }
 
-export function TerminalLine({ line }: { line: string }): JSX.Element {
+/**
+ * One scrollback line, memoized: a chatty command re-renders the panel many
+ * times a second, and only the lines that actually arrived should be parsed
+ * and diffed again.
+ */
+export const TerminalLine = memo(function TerminalLine({ line }: { line: string }): JSX.Element {
   const event = parseFeedLine(line)
 
   if (!event) {
@@ -69,7 +74,7 @@ export function TerminalLine({ line }: { line: string }): JSX.Element {
   }
 
   return <OutputRow text={event.text} />
-}
+})
 
 function ErrorRow({ text }: { text: string }): JSX.Element {
   return (

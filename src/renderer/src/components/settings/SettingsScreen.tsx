@@ -17,6 +17,7 @@ import {
   Server,
   SlidersHorizontal,
   Sparkles,
+  User,
   Wrench,
   X
 } from 'lucide-react'
@@ -53,6 +54,7 @@ import { SkillsControl } from './SkillsControl'
 
 const ICONS: Record<string, JSX.Element> = {
   plug: <Plug className="size-4" />,
+  user: <User className="size-4" />,
   sparkles: <Sparkles className="size-4" />,
   bot: <Bot className="size-4" />,
   wrench: <Wrench className="size-4" />,

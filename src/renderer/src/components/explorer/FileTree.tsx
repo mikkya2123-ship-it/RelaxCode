@@ -375,7 +375,9 @@ function TreeNode({ entry, depth, onMenu }: TreeNodeProps): JSX.Element {
   const childDepth = depth + 1
 
   return (
-    <div>
+    // `cv-auto` keeps a deep tree cheap: a folder that is scrolled out of view
+    // (and everything under it) is not laid out or painted until it is needed.
+    <div className="cv-auto">
       {renaming && inline ? (
         <InlineRow inline={inline} />
       ) : (

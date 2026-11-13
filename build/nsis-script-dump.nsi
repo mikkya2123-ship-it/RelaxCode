@@ -1,0 +1,424 @@
+!include "D:\Project\RelaxCode\node_modules\app-builder-lib\templates\nsis\include\StdUtils.nsh"
+!addincludedir "D:\Project\RelaxCode\node_modules\app-builder-lib\templates\nsis\include"
+!macro _isUpdated _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "updated"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isUpdated `"" isUpdated ""`
+
+!macro _isForceRun _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "force-run"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isForceRun `"" isForceRun ""`
+
+!macro _isKeepShortcuts _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "keep-shortcuts"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isKeepShortcuts `"" isKeepShortcuts ""`
+
+!macro _isNoDesktopShortcut _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "no-desktop-shortcut"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isNoDesktopShortcut `"" isNoDesktopShortcut ""`
+
+!macro _isDeleteAppData _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "delete-app-data"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isDeleteAppData `"" isDeleteAppData ""`
+
+!macro _isForAllUsers _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "allusers"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isForAllUsers `"" isForAllUsers ""`
+
+!macro _isForCurrentUser _a _b _t _f
+  ${StdUtils.TestParameter} $R9 "currentuser"
+  StrCmp "$R9" "true" `${_t}` `${_f}`
+!macroend
+!define isForCurrentUser `"" isForCurrentUser ""`
+
+!macro addLangs
+  !insertmacro MUI_LANGUAGE "English"
+  !insertmacro MUI_LANGUAGE "German"
+  !insertmacro MUI_LANGUAGE "French"
+  !insertmacro MUI_LANGUAGE "SpanishInternational"
+  !insertmacro MUI_LANGUAGE "SimpChinese"
+  !insertmacro MUI_LANGUAGE "TradChinese"
+  !insertmacro MUI_LANGUAGE "Japanese"
+  !insertmacro MUI_LANGUAGE "Korean"
+  !insertmacro MUI_LANGUAGE "Italian"
+  !insertmacro MUI_LANGUAGE "Dutch"
+  !insertmacro MUI_LANGUAGE "Danish"
+  !insertmacro MUI_LANGUAGE "Swedish"
+  !insertmacro MUI_LANGUAGE "Norwegian"
+  !insertmacro MUI_LANGUAGE "Finnish"
+  !insertmacro MUI_LANGUAGE "Russian"
+  !insertmacro MUI_LANGUAGE "Portuguese"
+  !insertmacro MUI_LANGUAGE "PortugueseBR"
+  !insertmacro MUI_LANGUAGE "Polish"
+  !insertmacro MUI_LANGUAGE "Ukrainian"
+  !insertmacro MUI_LANGUAGE "Czech"
+  !insertmacro MUI_LANGUAGE "Slovak"
+  !insertmacro MUI_LANGUAGE "Hungarian"
+  !insertmacro MUI_LANGUAGE "Arabic"
+  !insertmacro MUI_LANGUAGE "Turkish"
+  !insertmacro MUI_LANGUAGE "Thai"
+  !insertmacro MUI_LANGUAGE "Vietnamese"
+!macroend
+
+!include "C:\Users\Misha\AppData\Local\Temp\t-Nr4m4o\2-messages.nsh"
+!include "C:\Users\Misha\AppData\Local\Temp\t-Nr4m4o\3-messages.nsh"
+!addplugindir /x86-unicode "C:\Users\Misha\AppData\Local\electron-builder\Cache\nsis-resources-3.4.1\nsis-resources-3.4.1-2jx2y\plugins\x86-unicode"
+!macro licensePage
+  !insertmacro MUI_PAGE_LICENSE "D:\Project\RelaxCode\build\license.txt"
+!macroend
+
+# Custom RelaxCode installer — fully branded wizard on top of the
+# electron-builder NSIS machinery. Replaces stock assistedInstaller pages
+# with our own nsDialogs UI (build/installer/ui.nsh) while reusing every
+# update-critical piece from the stock templates:
+#   - multiUser.nsh          install modes, per-user/per-machine, /D= parsing
+#   - extractAppPackage.nsh  embedded app-64.7z with SetCompress off (blockmap!)
+#   - registryAddInstallInfo + shortcut macros (registry contract of
+#                              electron-updater)
+#   - uninstaller.nsh        un.* section + flags handling
+# The installer binary still gets latest.yml/.blockmap from electron-builder.
+# An uninstaller is produced at install time via WriteUninstaller (with a
+# custom script electron-builder does not run its two-pass uninstaller build).
+
+# declared before the template includes: installUtil.nsh compiles its
+# uninstallOldVersion FUNCTION at include time and it references $appExe;
+# the link vars are used by setLinkVars/shortcut macros from the templates;
+# the process-check vars are hoisted out of the vendored
+# allowOnlyOneInstallerInstance.nsh so CHECK_APP_RUNNING can be inserted in
+# both installer and uninstaller contexts
+Var appExe
+Var launchLink
+Var newStartMenuLink
+Var oldStartMenuLink
+Var newDesktopLink
+Var oldDesktopLink
+Var oldShortcutName
+Var oldMenuDirectory
+Var CmdPath
+Var PowerShellPath
+Var IsPowerShellAvailable
+# StartApp from common.nsh declares this var inside the macro, so we can
+# insert it only once; our RelaxStartApp variant below is Var-free and used
+# from both the finish page and the silent --force-run path
+Var startAppArgs
+
+!include "common.nsh"
+# we keep MUI2 only for MUI_LANGUAGE tables (addLangs); all pages are custom,
+# which MUI2 flags with a warning unless silenced explicitly
+!define MUI_DISABLE_INSERT_LANGUAGE_AFTER_PAGES_WARNING
+!define MUI_CUSTOMFUNCTION_GUIINIT relaxOnGuiInit
+!include "MUI2.nsh"
+!include "multiUser.nsh"
+!include "${PROJECT_DIR}\build\installer\vendor\allowOnlyOneInstallerInstance.nsh"
+!include "nsDialogs.nsh"
+!include "WinMessages.nsh"
+!include "StrContains.nsh"
+!include "installer.nsh"
+!include "installUtil.nsh"
+
+# copied verbatim from templates/nsis/assistedInstaller.nsh — we do not
+# include that file (it would add the stock pages), but the install mode
+# init logic it carries is required by initMultiUser call sites
+!macro initMultiUser
+  !ifdef INSTALL_MODE_PER_ALL_USERS
+    !insertmacro setInstallModePerAllUsers
+  !else
+    ${If} ${UAC_IsInnerInstance}
+    ${AndIfNot} ${UAC_IsAdmin}
+      # special return value for outer instance so it knows we did not have admin rights
+      SetErrorLevel 0x666666
+      Quit
+    ${endIf}
+
+    # checks registry for previous installation path (both for upgrading, reinstall, or uninstall)
+    StrCpy $hasPerMachineInstallation "0"
+    StrCpy $hasPerUserInstallation "0"
+
+    # set installation mode to setting from a previous installation
+    ReadRegStr $perMachineInstallationFolder HKLM "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ${if} $perMachineInstallationFolder != ""
+      StrCpy $hasPerMachineInstallation "1"
+    ${endif}
+
+    ReadRegStr $perUserInstallationFolder HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+    ${if} $perUserInstallationFolder != ""
+      StrCpy $hasPerUserInstallation "1"
+    ${endif}
+
+    ${GetParameters} $R0
+    ${GetOptions} $R0 "/allusers" $R1
+    ${IfNot} ${Errors}
+      StrCpy $hasPerMachineInstallation "1"
+      StrCpy $hasPerUserInstallation "0"
+    ${EndIf}
+
+    ${GetOptions} $R0 "/currentuser" $R1
+    ${IfNot} ${Errors}
+      StrCpy $hasPerMachineInstallation "0"
+      StrCpy $hasPerUserInstallation "1"
+    ${EndIf}
+
+    ${if} $hasPerUserInstallation == "1"
+    ${andif} $hasPerMachineInstallation == "0"
+      !insertmacro setInstallModePerUser
+    ${elseif} $hasPerUserInstallation == "0"
+      ${andif} $hasPerMachineInstallation == "1"
+      !insertmacro setInstallModePerAllUsers
+    ${else}
+      # if there is no installation, or there is both per-user and per-machine
+      !ifdef INSTALL_MODE_PER_ALL_USERS
+        !insertmacro setInstallModePerAllUsers
+      !else
+        !ifdef INSTALL_MODE_PER_ALL_USERS_DEFAULT
+          !insertmacro setInstallModePerAllUsers
+        !else
+          !insertmacro setInstallModePerUser
+        !endif
+      !endif
+    ${endif}
+  !endif
+!macroend
+
+# Var-free variant of StartApp from common.nsh (same body, no Var declaration);
+# defined before ui.nsh, which inserts it from relaxOnLaunch
+!macro RelaxStartApp
+  ${if} ${isUpdated}
+    StrCpy $startAppArgs "--updated"
+  ${else}
+    StrCpy $startAppArgs ""
+  ${endIf}
+  ${StdUtils.ExecShellAsUser} $0 "$launchLink" "open" "$startAppArgs"
+!macroend
+
+!include "${PROJECT_DIR}\build\installer\theme.nsh"
+!include "${PROJECT_DIR}\build\installer\lang.nsh"
+!include "${PROJECT_DIR}\build\installer\ui.nsh"
+# The un.* section for WriteUninstaller; must come after ui.nsh so the
+# customUnInit/customUnInstall hooks are already defined. The stock templates
+# switch Call targets via BUILD_UNINSTALLER (their two-pass uninstaller
+# build), so we emulate the uninstaller pass for this include: getProcessInfo
+# was already included in installer mode, so we define the un.-prefixed
+# variant of its helper ourselves and let CHECK_APP_RUNNING inside
+# un.onInit call it.
+!define BUILD_UNINSTALLER
+Function un._GetProcessInfo
+  !insertmacro FUNC_GETPROCESSINFO
+FunctionEnd
+!include "uninstaller.nsh"
+!undef BUILD_UNINSTALLER
+
+RequestExecutionLevel user
+
+BrandingText "RelaxCode"
+XPStyle off
+
+# ---------------------------------------------------------------- init ------
+
+Function .onInit
+  Call setInstallSectionSpaceRequired
+
+  SetOutPath $INSTDIR
+  ${LogSet} on
+
+  !insertmacro check64BitAndSetRegView
+
+  ${IfNot} ${UAC_IsInnerInstance}
+    !insertmacro ALLOW_ONLY_ONE_INSTALLER_INSTANCE
+  ${EndIf}
+
+  !insertmacro initMultiUser
+
+  StrCpy $relaxSuffix "-en"
+  ${If} $LANGUAGE == 1049
+    StrCpy $relaxSuffix "-ru"
+  ${EndIf}
+
+  InitPluginsDir
+  ${IfNot} ${Silent}
+    File /oname=$PLUGINSDIR\Manrope.ttf "${PROJECT_DIR}\build\installer\fonts\Manrope.ttf"
+    System::Call 'gdi32::AddFontResourceExW(w "$PLUGINSDIR\Manrope.ttf", i 0x10, p 0) i .r0' ; FR_PRIVATE
+    File /oname=$PLUGINSDIR\page-welcome-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-welcome-ru.bmp"
+    File /oname=$PLUGINSDIR\page-welcome-en.bmp "${PROJECT_DIR}\build\installer\assets\page-welcome-en.bmp"
+    File /oname=$PLUGINSDIR\page-license-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-license-ru.bmp"
+    File /oname=$PLUGINSDIR\page-license-en.bmp "${PROJECT_DIR}\build\installer\assets\page-license-en.bmp"
+    File /oname=$PLUGINSDIR\page-dir-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-dir-ru.bmp"
+    File /oname=$PLUGINSDIR\page-dir-en.bmp "${PROJECT_DIR}\build\installer\assets\page-dir-en.bmp"
+    File /oname=$PLUGINSDIR\page-finish-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-finish-ru.bmp"
+    File /oname=$PLUGINSDIR\page-finish-en.bmp "${PROJECT_DIR}\build\installer\assets\page-finish-en.bmp"
+    File /oname=$PLUGINSDIR\page-unconfirm-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-unconfirm-ru.bmp"
+    File /oname=$PLUGINSDIR\page-unconfirm-en.bmp "${PROJECT_DIR}\build\installer\assets\page-unconfirm-en.bmp"
+    File /oname=$PLUGINSDIR\page-unfinish-ru.bmp "${PROJECT_DIR}\build\installer\assets\page-unfinish-ru.bmp"
+    File /oname=$PLUGINSDIR\page-unfinish-en.bmp "${PROJECT_DIR}\build\installer\assets\page-unfinish-en.bmp"
+    File /oname=$PLUGINSDIR\license-ru.txt "${PROJECT_DIR}\build\installer\assets\license-ru.txt"
+    File /oname=$PLUGINSDIR\license-en.txt "${PROJECT_DIR}\build\installer\assets\license-en.txt"
+    File /oname=$PLUGINSDIR\cb-off.bmp "${PROJECT_DIR}\build\installer\assets\cb-off.bmp"
+    File /oname=$PLUGINSDIR\cb-on.bmp "${PROJECT_DIR}\build\installer\assets\cb-on.bmp"
+    File /oname=$PLUGINSDIR\btn-next-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-next-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-next-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-next-en.bmp"
+    File /oname=$PLUGINSDIR\btn-next-dis-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-next-dis-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-next-dis-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-next-dis-en.bmp"
+    File /oname=$PLUGINSDIR\btn-back-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-back-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-back-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-back-en.bmp"
+    File /oname=$PLUGINSDIR\btn-cancel-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-cancel-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-cancel-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-cancel-en.bmp"
+    File /oname=$PLUGINSDIR\btn-install-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-install-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-install-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-install-en.bmp"
+    File /oname=$PLUGINSDIR\btn-finish-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-finish-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-finish-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-finish-en.bmp"
+    File /oname=$PLUGINSDIR\btn-launch-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-launch-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-launch-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-launch-en.bmp"
+    File /oname=$PLUGINSDIR\btn-browse-ru.bmp "${PROJECT_DIR}\build\installer\assets\btn-browse-ru.bmp"
+    File /oname=$PLUGINSDIR\btn-browse-en.bmp "${PROJECT_DIR}\build\installer\assets\btn-browse-en.bmp"
+    File /oname=$PLUGINSDIR\card-user-on-ru.bmp "${PROJECT_DIR}\build\installer\assets\card-user-on-ru.bmp"
+    File /oname=$PLUGINSDIR\card-user-on-en.bmp "${PROJECT_DIR}\build\installer\assets\card-user-on-en.bmp"
+    File /oname=$PLUGINSDIR\card-user-off-ru.bmp "${PROJECT_DIR}\build\installer\assets\card-user-off-ru.bmp"
+    File /oname=$PLUGINSDIR\card-user-off-en.bmp "${PROJECT_DIR}\build\installer\assets\card-user-off-en.bmp"
+    File /oname=$PLUGINSDIR\card-all-on-ru.bmp "${PROJECT_DIR}\build\installer\assets\card-all-on-ru.bmp"
+    File /oname=$PLUGINSDIR\card-all-on-en.bmp "${PROJECT_DIR}\build\installer\assets\card-all-on-en.bmp"
+    File /oname=$PLUGINSDIR\card-all-off-ru.bmp "${PROJECT_DIR}\build\installer\assets\card-all-off-ru.bmp"
+    File /oname=$PLUGINSDIR\card-all-off-en.bmp "${PROJECT_DIR}\build\installer\assets\card-all-off-en.bmp"
+  ${EndIf}
+FunctionEnd
+
+# brands the outer wizard window: 960x640 client, dark, no stock chrome.
+# Wired through MUI_CUSTOMFUNCTION_GUIINIT because MUI2 owns .onGUIInit
+Function relaxOnGuiInit
+  SendMessage $HWNDPARENT ${WM_SETTEXT} 0 "STR:$(relaxWindowTitle)"
+  !insertmacro RelaxBrandWindow
+  !insertmacro RelaxCreateFonts
+FunctionEnd
+
+Function un.onGUIInit
+  SendMessage $HWNDPARENT ${WM_SETTEXT} 0 "STR:$(relaxUnWindowTitle)"
+  !insertmacro RelaxBrandWindow
+  !insertmacro RelaxCreateFonts
+FunctionEnd
+
+# ---------------------------------------------------------------- pages -----
+
+Page custom showWelcome leaveWelcome
+Page custom showLicense leaveLicense
+Page custom showDir leaveDir
+Page instfiles relaxInstFilesPre
+Page custom showFinish leaveFinish
+
+UninstPage custom un.showUnConfirm un.leaveUnConfirm
+UninstPage instfiles un.relaxUnInstPre
+UninstPage custom un.showUnFinish un.leaveUnFinish
+
+!insertmacro addLangs
+
+# ------------------------------------------------------------- install ------
+
+Section "install" INSTALL_SECTION_ID
+  # silent upgrade of a per-machine installation elevates first (stock logic)
+  !ifndef INSTALL_MODE_PER_ALL_USERS
+    ${if} $hasPerMachineInstallation == "1"
+    ${andIf} ${Silent}
+      ${ifNot} ${UAC_IsAdmin}
+        ShowWindow $HWNDPARENT ${SW_HIDE}
+        !insertmacro UAC_RunElevated
+        ${Switch} $0
+          ${Case} 0
+            ${Break}
+          ${Case} 1223 ;user aborted
+            ${Break}
+          ${Default}
+            MessageBox mb_IconStop|mb_TopMost|mb_SetForeground "Unable to elevate, error $0"
+            ${Break}
+        ${EndSwitch}
+        Quit
+      ${else}
+        !insertmacro setInstallModePerAllUsers
+      ${endIf}
+    ${endIf}
+  !endif
+
+  ${IfNot} ${Silent}
+    SetDetailsPrint none
+  ${endif}
+
+  StrCpy $appExe "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+
+  # must be called before uninstallOldVersion
+  !insertmacro setLinkVars
+
+  ${ifNot} ${UAC_IsInnerInstance}
+    !insertmacro CHECK_APP_RUNNING
+  ${endif}
+
+  Var /GLOBAL keepShortcuts
+  StrCpy $keepShortcuts "false"
+  !insertmacro setIsTryToKeepShortcuts
+  ${if} $isTryToKeepShortcuts == "true"
+    ReadRegStr $R1 SHELL_CONTEXT "${INSTALL_REGISTRY_KEY}" KeepShortcuts
+
+    ${if} $R1 == "true"
+    ${andIf} ${FileExists} "$appExe"
+      StrCpy $keepShortcuts "true"
+    ${endIf}
+  ${endif}
+
+  !insertmacro uninstallOldVersion SHELL_CONTEXT
+  !insertmacro handleUninstallResult SHELL_CONTEXT
+
+  ${if} $installMode == "all"
+    !insertmacro uninstallOldVersion HKEY_CURRENT_USER
+    !insertmacro handleUninstallResult HKEY_CURRENT_USER
+  ${endIf}
+
+  SetOutPath $INSTDIR
+
+  !insertmacro extractEmbeddedAppPackage
+
+  # electron always uses per user app data
+  ${if} $installMode == "all"
+    SetShellVarContext current
+  ${endif}
+  !insertmacro copyFile "$EXEPATH" "$LOCALAPPDATA\${APP_INSTALLER_STORE_FILE}"
+  ${if} $installMode == "all"
+    SetShellVarContext all
+  ${endif}
+
+  # custom script: electron-builder does not run its two-pass uninstaller
+  # build, so the uninstaller is written right here from the un.* section
+  WriteUninstaller "$INSTDIR\${UNINSTALL_FILENAME}"
+
+  !insertmacro registryAddInstallInfo
+  !insertmacro addStartMenuLink $keepShortcuts
+  !insertmacro addDesktopLink $keepShortcuts
+
+  ${if} ${FileExists} "$newStartMenuLink"
+    StrCpy $launchLink "$newStartMenuLink"
+  ${else}
+    StrCpy $launchLink "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+  ${endIf}
+
+  !ifmacrodef registerFileAssociations
+    !insertmacro registerFileAssociations
+  !endif
+
+  # for assisted installer run only if silent, because the wizard has the
+  # dedicated "Launch RelaxCode" button for interactive installs
+  ${if} ${isForceRun}
+  ${andIf} ${Silent}
+    HideWindow
+    !insertmacro RelaxStartApp
+  ${endIf}
+SectionEnd
+
+Function setInstallSectionSpaceRequired
+  !insertmacro setSpaceRequired ${INSTALL_SECTION_ID}
+FunctionEnd
+

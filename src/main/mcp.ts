@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { ReadableStream as NodeWebReadable } from 'node:stream/web'
 import { app } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -24,6 +23,7 @@ import {
   type McpToolInfo,
   type McpToolRisk
 } from '@shared/mcp'
+import { artCraftServerMode, isArtCraftAppId } from '@shared/artcraft'
 import type { ImageMeta } from '@shared/tool-meta'
 import { logEvent } from './logger'
 import type { ToolResult } from './tools'
@@ -196,6 +196,13 @@ export async function startServer(
   }
   if (!config.enabled) return { ok: false, error: 'disabled' }
 
+  // Connect is also a status check: pressing it on a healthy connector must not
+  // tear the running server down, because the stop/start window is exactly
+  // when tool calls fail with "not ready".
+  if (!isReconnect && managed.status === 'ready' && managed.client && managed.tools.length > 0) {
+    return { ok: true, error: null }
+  }
+
   await stopServer(name, { silent: true })
   const generation = managed.generation + 1
   managed.generation = generation
@@ -205,6 +212,25 @@ export async function startServer(
 
   const client = new Client({ name: 'RelaxCode', version: app.getVersion() })
   managed.client = client
+  // The SDK does not report a dead child on its own: without this watch the
+  // UI would keep showing "ready" with a stale tool list until the next call
+  // failed. Clear the tools, say what happened, and let the reconnect loop
+  // bring the server back.
+  client.onclose = () => {
+    if (generation !== managed.generation) return
+    if (managed.stopping || managed.client !== client) return
+    managed.client = null
+    managed.pid = null
+    managed.tools = []
+    managed.schemas = new Map()
+    managed.startedAt = null
+    setStatus(managed, 'error', 'connection closed')
+    logEvent('warn', `mcp ${config.name} connection closed`)
+    scheduleReconnect(managed)
+  }
+  client.onerror = (error) => {
+    logEvent('warn', `mcp ${config.name} transport: ${errorMessage(error)}`)
+  }
 
   let transport: StdioClientTransport | StreamableHTTPClientTransport
   try {
@@ -231,12 +257,19 @@ export async function startServer(
     void readStderrStream(transport, managed, generation)
   }
 
-  const connectTimeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`connection timed out after ${CONNECT_TIMEOUT_MS} ms`)), CONNECT_TIMEOUT_MS)
+  // One timer covers both the handshake and tools/list, and it is cleared as
+  // soon as the attempt settles. Leaving it armed used to reject an already
+  // settled race and, after a slow start, kill a connection that was fine.
+  let timer: NodeJS.Timeout | null = null
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`connection timed out after ${CONNECT_TIMEOUT_MS} ms`)),
+      CONNECT_TIMEOUT_MS
+    )
   })
 
   try {
-    await Promise.race([client.connect(transport), connectTimeout])
+    await Promise.race([client.connect(transport), deadline])
     if (generation !== managed.generation) {
       // A stop/restart happened while connecting; drop this attempt.
       await closeClient(client)
@@ -244,10 +277,23 @@ export async function startServer(
     }
     if (transport instanceof StdioClientTransport) managed.pid = transport.pid ?? null
 
-    const listed = await Promise.race([client.listTools(), connectTimeout])
+    // A cold app can answer the first tools/list before its command registry
+    // is ready; one short retry avoids a "ready with no tools" server.
+    const listTools = async (): Promise<Awaited<ReturnType<Client['listTools']>>> => {
+      const first = await client.listTools()
+      if (first.tools.length > 0) return first
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      return client.listTools()
+    }
+    const listed = await Promise.race([listTools(), deadline])
     if (generation !== managed.generation) {
       await closeClient(client)
       return { ok: false, error: 'superseded' }
+    }
+    if (listed.tools.length === 0) {
+      // A connected server with no tools is a broken connector, not "ready":
+      // the agent would see nothing and the user would have no way to tell.
+      throw new Error('the server connected but declared no tools')
     }
 
     managed.tools = []
@@ -269,50 +315,58 @@ export async function startServer(
 
     managed.startedAt = Date.now()
     managed.error = null
+    // A successful run earns a fresh reconnect budget; without this a server
+    // that recovered five times over a long session could never recover again.
+    managed.reconnectAttempts = 0
     setStatus(managed, 'ready')
     logEvent('info', `mcp ${config.name} ready (${managed.tools.length} tools)`)
     emit({ type: 'tool-list-changed', name: config.name })
     return { ok: true, error: null }
   } catch (error) {
     if (generation !== managed.generation) return { ok: false, error: 'superseded' }
-    await closeClient(client)
+    // Detach before closing so onclose does not report the same failure twice.
     managed.client = null
+    await closeClient(client)
     managed.pid = null
     const message = errorMessage(error)
+    managed.tools = []
+    managed.schemas = new Map()
+    managed.startedAt = null
     setStatus(managed, 'error', message)
     logEvent('warn', `mcp ${config.name} failed: ${message}`)
     scheduleReconnect(managed)
     return { ok: false, error: message }
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 
-async function readStderrStream(
+function readStderrStream(
   transport: StdioClientTransport,
   managed: ManagedServer,
   generation: number
-): Promise<void> {
-  const stream = transport.stderr as unknown as NodeWebReadable<Uint8Array> | null
-  if (!stream) return
+): void {
+  // The SDK hands back a Node stream (a PassThrough when `stderr: 'pipe'`), not
+  // a web ReadableStream: reading it with getReader() threw and the UI never
+  // saw a single diagnostic line.
+  const stream = transport.stderr as unknown as NodeJS.ReadableStream | null
+  if (!stream || typeof (stream as { on?: unknown }).on !== 'function') return
   const decoder = new TextDecoder()
   let pending = ''
-  try {
-    const reader = stream.getReader()
+  stream.on('data', (chunk: unknown) => {
+    if (generation !== managed.generation) return
+    pending += decoder.decode(chunk as Uint8Array, { stream: true })
     for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (generation !== managed.generation) break
-      pending += decoder.decode(value, { stream: true })
-      for (;;) {
-        const newline = pending.indexOf('\n')
-        if (newline < 0) break
-        const line = pending.slice(0, newline).trimEnd()
-        pending = pending.slice(newline + 1)
-        if (line.length > 0) pushStderr(managed, line.slice(0, 500))
-      }
+      const newline = pending.indexOf('\n')
+      if (newline < 0) break
+      const line = pending.slice(0, newline).trimEnd()
+      pending = pending.slice(newline + 1)
+      if (line.length > 0) pushStderr(managed, line.slice(0, 500))
     }
-  } catch {
+  })
+  stream.on('error', () => {
     // The stream dies with the process; onclose handles the reconnect.
-  }
+  })
 }
 
 /** A dead server (Unity domain reload, Blender restart) gets a few tries back. */
@@ -364,9 +418,15 @@ export async function stopServer(
   managed.tools = []
   managed.schemas = new Map()
   managed.startedAt = null
-  await closeClient(client)
-  managed.stopping = false
+  // Publish the stopped state before the (async) close: callers such as the
+  // disconnect IPC used to read the list mid-close and see "ready" with an
+  // empty tool list, which looked like the server had withdrawn its tools.
   setStatus(managed, 'stopped')
+  try {
+    await closeClient(client)
+  } finally {
+    managed.stopping = false
+  }
   if (!options.silent) logEvent('info', `mcp ${name} stopped`)
   return { ok: true }
 }
@@ -391,9 +451,21 @@ export function mcpToolDefs(): McpToolDef[] {
     for (const tool of managed.tools) {
       if (!mcpToolEnabled(config, tool.tool)) continue
       const schema = managed.schemas.get(tool.tool)
+      // ArtCraft apps can run headless or bridged to the user's window. The
+      // model sees tool descriptions on every turn, so state the mode there:
+      // it is the difference between editing the user's document and a
+      // look-alike session that happens to hold similar content.
+      const artMode = isArtCraftAppId(config.name) ? artCraftServerMode(config.args) : null
+      const modeTag =
+        artMode === 'live'
+          ? ' · live window'
+          : artMode === 'headless'
+            ? " · headless session, not the user's window"
+            : ''
+      const label = `[MCP ${config.name}${modeTag}]`
       defs.push({
         name: tool.name,
-        description: tool.description.length > 0 ? `[MCP ${config.name}] ${tool.description}` : `[MCP ${config.name}]`,
+        description: tool.description.length > 0 ? `${label} ${tool.description}` : label,
         parameters: (schema && typeof schema === 'object' ? schema : { type: 'object' }) as Record<string, unknown>,
         risk: tool.risk,
         execute: async (args, ctx) => callToolAsResult(config.name, tool.tool, args, ctx.signal)
@@ -460,6 +532,9 @@ async function callToolAsResult(
     if (/connection closed|not connected|transport closed|fetch failed/i.test(message)) {
       managed.client = null
       managed.pid = null
+      managed.tools = []
+      managed.schemas = new Map()
+      managed.startedAt = null
       setStatus(managed, 'error', message)
       scheduleReconnect(managed)
     }
@@ -488,24 +563,54 @@ function identity(config: McpServerConfig): string {
   ])
 }
 
+/**
+ * Detach a managed server that is about to be replaced in the map. Its child
+ * process must not survive the old config: after a re-grant the connector
+ * would otherwise leave an orphan stdio server running forever.
+ */
+function disposeManaged(managed: ManagedServer): void {
+  if (managed.reconnectTimer) {
+    clearTimeout(managed.reconnectTimer)
+    managed.reconnectTimer = null
+  }
+  managed.stopping = true
+  managed.generation += 1
+  const client = managed.client
+  managed.client = null
+  managed.pid = null
+  managed.tools = []
+  managed.schemas = new Map()
+  managed.startedAt = null
+  void closeClient(client).finally(() => {
+    managed.stopping = false
+  })
+}
+
 export function saveServer(raw: unknown): { ok: boolean; error: string | null } {
   loadFile()
   const config = normalizeMcpServer(raw, '')
   if (!config) return { ok: false, error: 'invalid-config' }
   const existing = servers.get(config.name)
-  if (existing) {
-    // Same program → keep the trust decision; anything else starts over.
-    config.trusted = existing.config.trusted && identity(existing.config) === identity(config)
+
+  if (existing && identity(existing.config) === identity(config)) {
+    // Same program: keep the live client and its tool list. Only settings that
+    // do not change the process (risk, disabled tools, timeout) are replaced.
+    // Rebuilding the entry here used to leave status "ready" with no tools.
+    const wasEnabled = existing.config.enabled
+    existing.config = { ...config, trusted: existing.config.trusted }
+    saveFile()
+    if (!config.enabled && wasEnabled) {
+      void stopServer(config.name)
+    } else {
+      emitState()
+    }
+    return { ok: true, error: null }
   }
-  servers.set(config.name, { ...freshServer(config), status: existing?.status ?? 'stopped' })
-  const managed = servers.get(config.name)
-  if (managed) {
-    managed.tools = []
-    managed.schemas = new Map()
-  }
-  if (existing && (identity(existing.config) !== identity(config) || !config.enabled)) {
-    void stopServer(config.name)
-  }
+
+  // A different program (or a different root) starts from a clean slate.
+  if (existing) config.trusted = false
+  if (existing) disposeManaged(existing)
+  servers.set(config.name, freshServer(config))
   saveFile()
   emitState()
   return { ok: true, error: null }
@@ -537,6 +642,8 @@ export function importServers(json: string): { ok: boolean; added: number; error
   let added = 0
   for (const config of parsed) {
     // Imported servers always arrive untrusted, even when the name existed.
+    const existing = servers.get(config.name)
+    if (existing) disposeManaged(existing)
     servers.set(config.name, freshServer({ ...config, trusted: false }))
     added += 1
   }

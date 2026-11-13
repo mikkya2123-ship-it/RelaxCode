@@ -33,6 +33,7 @@ import {
   type WriteFileResult
 } from '@shared/ipc'
 import type { EntryKind } from '@shared/entries'
+import type { UpdateState } from '@shared/updater'
 
 const api = {
   window: {
@@ -207,8 +208,13 @@ const api = {
       ipcRenderer.invoke(IPC.MCP_INVOKE, server, tool, argsJson),
     detect: (appId: string): Promise<McpDetectedApp[]> =>
       ipcRenderer.invoke(IPC.MCP_DETECT, appId),
-    setup: (appId: string, exePath?: string): Promise<McpSetupResult> =>
-      ipcRenderer.invoke(IPC.MCP_SETUP, appId, exePath),
+    setup: (
+      appId: string,
+      exePath?: string,
+      workspace?: string,
+      mode?: 'headless' | 'live'
+    ): Promise<McpSetupResult> =>
+      ipcRenderer.invoke(IPC.MCP_SETUP, appId, exePath, workspace, mode),
     launch: (appId: string, exePath: string): Promise<McpStartResult> =>
       ipcRenderer.invoke(IPC.MCP_LAUNCH, appId, exePath),
     playbookGet: (server: string): Promise<string | null> =>
@@ -243,6 +249,23 @@ const api = {
       const listener = (_event: IpcRendererEvent, payload: TerminalOutputEvent): void => callback(payload)
       ipcRenderer.on(IPC.TERM_OUTPUT, listener)
       return () => ipcRenderer.removeListener(IPC.TERM_OUTPUT, listener)
+    }
+  },
+  updates: {
+    /** The state the main process holds right now. */
+    get: (): Promise<UpdateState> => ipcRenderer.invoke(IPC.UPDATE_STATE_GET),
+    /** Asks GitHub for the newest release. */
+    check: (): Promise<UpdateState> => ipcRenderer.invoke(IPC.UPDATE_CHECK),
+    /** Downloads the pending release; progress comes on `onState`. */
+    download: (): Promise<UpdateState> => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
+    /** Installs the downloaded release and restarts the app. */
+    install: (): Promise<void> => ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+    onState: (callback: (state: UpdateState) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, state: UpdateState): void => callback(state)
+      ipcRenderer.on(IPC.UPDATE_STATE, listener)
+      return () => {
+        ipcRenderer.removeListener(IPC.UPDATE_STATE, listener)
+      }
     }
   },
   chat: {

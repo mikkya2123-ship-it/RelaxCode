@@ -13,7 +13,7 @@ import {
   effectiveSkills,
   skillById
 } from '../src/shared/skills.ts'
-import { rankSkills, selectSkill } from '../src/shared/skill-select.ts'
+import { findSkill, rankSkills, selectSkill } from '../src/shared/skill-select.ts'
 
 let failed = 0
 function check(label, condition, extra) {
@@ -128,6 +128,42 @@ check(
   'selection still works on an edited catalog',
   selectSkill('Сделай сайт-визитку', edited)?.id === 'web-page'
 )
+
+/* -------------------------------- the packs ------------------------------- */
+
+const inCategory = (category) => SKILLS.filter((skill) => skill.category === category)
+check('web pack is large', inCategory('web').length >= 20, inCategory('web').length)
+check('ui pack is large', inCategory('ui').length >= 20, inCategory('ui').length)
+check('graphics pack is large', inCategory('graphics').length >= 15, inCategory('graphics').length)
+check('3d pack is large', inCategory('three-d').length >= 12, inCategory('three-d').length)
+check('godot pack is large', inCategory('godot').length >= 25, inCategory('godot').length)
+check('blender pack is large', inCategory('blender').length >= 20, inCategory('blender').length)
+check('every category has skills', ['web', 'ui', 'graphics', 'three-d', 'godot', 'blender', 'content'].every((category) => inCategory(category).length > 0))
+check('the library is past a hundred skills', SKILLS.length > 100, SKILLS.length)
+
+/* ------------------------------ the resolver ------------------------------ */
+
+// What the model passes to use_skill is not always a clean id: titles, other
+// cases and plain descriptions must resolve instead of failing with a cross.
+check('resolves an exact id', findSkill('threejs')?.id === 'threejs')
+check('resolves an English title', findSkill('Three.js scene')?.id === 'threejs')
+check('resolves a Russian title', findSkill('Свет и рендер в Blender')?.id === 'blender-render')
+check('resolves underscores and capitals', findSkill('Godot_UI')?.id === 'godot-ui')
+check('resolves a partial id', findSkill('blender-export')?.id === 'blender-export-glb')
+check('resolves a description', findSkill('Собери инвентарь в godot')?.id === 'godot-inventory')
+check('resolves a spaced title', findSkill('command palette')?.id === 'ui-command-palette')
+check('returns null for nonsense', findSkill('zzzqqq') === null)
+check('returns null for an empty query', findSkill('   ') === null)
+
+for (const [request, id] of [
+  ['Сделай палитру команд', 'ui-command-palette'],
+  ['Свёрстай разворот журнала', 'gs-magazine-spread'],
+  ['Собери инвентарь в Godot', 'godot-inventory'],
+  ['Сделай каркас приложения с боковым меню', 'ui-layout-shell']
+]) {
+  const picked = selectSkill(request)
+  check(`the new packs pick ${id} for "${request}"`, picked?.id === id, picked?.id ?? null)
+}
 
 /* ------------------------------ explainability ---------------------------- */
 

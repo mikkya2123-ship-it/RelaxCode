@@ -136,6 +136,8 @@ const TOOL_GROUPS: Record<string, Group> = {
   open_url: 'web',
   docs_lookup: 'web',
   download_file: 'web',
+  download_asset: 'web',
+  inspect_image: 'media',
   browser_pilot: 'web',
   fill_form: 'web',
   api_call: 'web',

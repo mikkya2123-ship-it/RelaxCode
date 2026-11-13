@@ -162,6 +162,7 @@ export function ThinkingSlider({
 
       <div
         className="think-slider relative h-7 select-none"
+        data-think={level}
         style={{ '--think-at': String(fraction) } as CSSProperties}
       >
         <div
@@ -212,7 +213,7 @@ export function ThinkingSlider({
         <span
           aria-hidden
           data-dragging={dragging ? 'true' : undefined}
-          className="think-thumb pointer-events-none absolute top-1/2 size-4 rounded-full"
+          className="think-thumb pointer-events-none absolute top-1/2 size-[22px] rounded-full"
         />
       </div>
 

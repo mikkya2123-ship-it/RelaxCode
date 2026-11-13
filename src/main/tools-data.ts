@@ -1,9 +1,9 @@
 import { promises as fs } from 'node:fs'
 import { createRequire } from 'node:module'
-import { basename, join } from 'node:path'
-import { safeHttpUrl } from '@shared/web-search'
+import { basename, dirname, join } from 'node:path'
 import { formatBytes } from './visuals'
 import { getWorkspaceRoot } from './workspace'
+import { fetchPublicFile } from './public-net'
 import { decodeXmlText, readZip } from './zip-reader'
 import { extractPdfText } from './pdf-text'
 import {
@@ -230,25 +230,22 @@ const downloadFileTool: ToolDef = {
   execute: async (args, ctx) => {
     const root = getWorkspaceRoot()
     if (!root) throw new ToolError(NO_WORKSPACE)
-    const url = safeHttpUrl(argString(args, 'url'))
-    if (!url) throw new ToolError('Only public http(s) URLs are allowed')
-    const target = resolveInWorkspace(argString(args, 'path', false) || basename(new URL(url).pathname) || 'download')
-
-    const response = await fetch(url, { signal: AbortSignal.any([ctx.signal, AbortSignal.timeout(120000)]) })
-    if (!response.ok) return { ok: false, summary: `HTTP ${response.status}`, detail: `Downloading ${url} failed.` }
-    const declared = Number(response.headers.get('content-length') ?? 0)
-    if (declared > MAX_DOWNLOAD_BYTES) {
-      return { ok: false, summary: 'too large', detail: `The file is ${formatBytes(declared)}; the cap is ${formatBytes(MAX_DOWNLOAD_BYTES)}.` }
-    }
-    const buffer = Buffer.from(await response.arrayBuffer())
-    if (buffer.length > MAX_DOWNLOAD_BYTES) {
-      return { ok: false, summary: 'too large', detail: `The file is ${formatBytes(buffer.length)}; the cap is ${formatBytes(MAX_DOWNLOAD_BYTES)}.` }
-    }
-    await fs.writeFile(target, buffer)
+    const url = argString(args, 'url')
+    const file = await fetchPublicFile(url, ctx.signal, {
+      maxBytes: MAX_DOWNLOAD_BYTES,
+      timeoutMs: 120000,
+      noun: 'file',
+      serverLabel: 'file server'
+    })
+    const target = resolveInWorkspace(
+      argString(args, 'path', false) || basename(new URL(file.url).pathname) || 'download'
+    )
+    await fs.mkdir(dirname(target), { recursive: true })
+    await fs.writeFile(target, file.buffer)
     return {
       ok: true,
-      summary: `saved ${relPath(target)} (${formatBytes(buffer.length)})`,
-      detail: `${url} → ${relPath(target)}\n${formatBytes(buffer.length)}, ${response.headers.get('content-type') ?? 'unknown type'}`
+      summary: `saved ${relPath(target)} (${formatBytes(file.buffer.length)})`,
+      detail: `${file.url} → ${relPath(target)}\n${formatBytes(file.buffer.length)}, ${file.contentType || 'unknown type'}\nThe bytes were checked against the private-network guard on every redirect; a download that lands on a login page is saved as the page it is, so use download_asset when the file must be a picture or font.`
     }
   }
 }

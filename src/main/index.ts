@@ -269,6 +269,7 @@ import {
   detectApps,
   getPlaybook,
   launchApp,
+  prepareArtCraftForWorkspace,
   setPlaybook,
   setupConnector
 } from './apps'
@@ -293,6 +294,13 @@ import { resolveUiReply, setUiWindow } from './ui-bridge'
 import { restoreProjectSnapshot } from './tools-project'
 import { createTerminal, closeTerminal, listTerminals, stopTerminal, terminalInput } from './term-sessions'
 import { setWebSearchFetch } from './webSearch'
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateState,
+  installUpdate,
+  startUpdater
+} from './updater'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -751,12 +759,17 @@ function registerIpc(): void {
     return listStates()
   })
 
-  ipcMain.handle(IPC.MCP_CONNECT, (_event, name: string): Promise<McpStartResult> => {
+  ipcMain.handle(IPC.MCP_CONNECT, async (_event, name: string): Promise<McpStartResult> => {
+    // A Craft app may still carry a root from another project (or none at all).
+    // Re-point it first so Connect never succeeds into a connector that cannot
+    // touch a single file.
+    const prepared = await prepareArtCraftForWorkspace(name, getWorkspaceRoot() ?? '')
+    if (!prepared.ok) return { ok: false, error: prepared.error ?? 'setup-failed' }
     return startMcpServer(name)
   })
 
-  ipcMain.handle(IPC.MCP_DISCONNECT, (_event, name: string): McpServerState[] => {
-    void stopMcpServer(name)
+  ipcMain.handle(IPC.MCP_DISCONNECT, async (_event, name: string): Promise<McpServerState[]> => {
+    await stopMcpServer(name)
     return listStates()
   })
 
@@ -799,13 +812,25 @@ function registerIpc(): void {
     return detectApps(appId)
   })
 
-  ipcMain.handle(IPC.MCP_SETUP, (_event, appId: string, exePath?: string): Promise<McpSetupResult> => {
-    return setupConnector(appId, exePath)
-  })
+  ipcMain.handle(
+    IPC.MCP_SETUP,
+    (
+      _event,
+      appId: string,
+      exePath?: string,
+      workspace?: string,
+      mode?: 'headless' | 'live'
+    ): Promise<McpSetupResult> => {
+      return setupConnector(appId, exePath, workspace, mode ?? 'headless')
+    }
+  )
 
-  ipcMain.handle(IPC.MCP_LAUNCH, (_event, appId: string, exePath: string): McpStartResult => {
-    return launchApp(appId, exePath)
-  })
+  ipcMain.handle(
+    IPC.MCP_LAUNCH,
+    (_event, appId: string, exePath: string): Promise<McpStartResult> => {
+      return launchApp(appId, exePath)
+    }
+  )
 
   ipcMain.handle(IPC.MCP_PLAYBOOK_GET, (_event, server: string): string | null => {
     return getPlaybook(server)
@@ -950,6 +975,13 @@ function registerIpc(): void {
 
   ipcMain.on(IPC.TRAY_MENU_ACTION, (_event, action: string) => handleTrayMenuAction(action))
 
+  ipcMain.handle(IPC.UPDATE_STATE_GET, () => getUpdateState())
+  ipcMain.handle(IPC.UPDATE_CHECK, () => checkForUpdates())
+  ipcMain.handle(IPC.UPDATE_DOWNLOAD, () => downloadUpdate())
+  ipcMain.handle(IPC.UPDATE_INSTALL, () => {
+    installUpdate()
+  })
+
   setChangeListener((dirs) => {
     mainWindow?.webContents.send(IPC.WORKSPACE_CHANGED, dirs)
   })
@@ -960,6 +992,9 @@ void app.whenReady().then(() => {
   createWindow()
   createTray()
   beginTeamSession()
+  // Checks the GitHub releases a few seconds after the window is up and then
+  // every 90 minutes; the title bar shows the button when something is newer.
+  startUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -144,7 +144,8 @@ interface ChatState extends ChatView {
   activeChatId: string
   /** Servers live in the main process and are shared by all chats. */
   processes: BackgroundProcessInfo[]
-  newChat: () => string
+  /** A fresh conversation; without a mode it keeps the one being used now. */
+  newChat: (mode?: ChatMode) => string
   selectChat: (id: string) => void
   deleteChat: (id: string) => void
   /** Throws every chat away and starts from a single empty one. */
@@ -604,6 +605,62 @@ export const useChatStore = create<ChatState>((set, get) => {
     ...view(chat)
   })
 
+  /**
+   * Streamed text is merged before it reaches the store. A fast model sends
+   * dozens of tiny deltas a second, and each one used to replace the message
+   * object — which re-rendered the transcript and re-parsed its markdown that
+   * many times. Deltas now collect for a few tens of milliseconds and land in
+   * one patch: the same characters, a fraction of the work.
+   */
+  type StreamChunk = { kind: 'text' | 'reasoning'; text: string; at: number }
+  const STREAM_FLUSH_MS = 40
+  // Per chat, in arrival order: runs of the same kind merge into one chunk.
+  const pendingStream = new Map<string, StreamChunk[]>()
+  let streamTimer: ReturnType<typeof setTimeout> | null = null
+
+  const flushStreaming = (): void => {
+    if (streamTimer !== null) {
+      clearTimeout(streamTimer)
+      streamTimer = null
+    }
+    if (pendingStream.size === 0) return
+    const entries = [...pendingStream]
+    pendingStream.clear()
+    for (const [chatId, chatChunks] of entries) {
+      patch(chatId, (session) => {
+        let messages = session.messages
+        for (const chunk of chatChunks) {
+          messages =
+            chunk.kind === 'text'
+              ? updateStreamingMessage(messages, (message) => appendText(message, chunk.text))
+              : updateStreamingMessage(messages, (message) =>
+                  appendReasoning(message, chunk.text, chunk.at)
+                )
+        }
+        return messages === session.messages ? session : { ...session, messages }
+      })
+    }
+  }
+
+  const queueStreaming = (
+    chatId: string,
+    kind: StreamChunk['kind'],
+    text: string,
+    at: number
+  ): void => {
+    const queued = pendingStream.get(chatId) ?? []
+    if (!pendingStream.has(chatId)) pendingStream.set(chatId, queued)
+    const last = queued[queued.length - 1]
+    if (last && last.kind === kind) {
+      last.text += text
+      last.at = at
+    } else {
+      queued.push({ kind, text, at })
+    }
+    if (streamTimer !== null) return
+    streamTimer = setTimeout(flushStreaming, STREAM_FLUSH_MS)
+  }
+
   const activeSession = (): ChatSession => {
     const state = get()
     return state.chats.find((chat) => chat.id === state.activeChatId) ?? state.chats[0]
@@ -629,8 +686,10 @@ export const useChatStore = create<ChatState>((set, get) => {
     activeChatId: restored.activeChatId,
     processes: [],
 
-    newChat: () => {
-      const chat = newSession(readMode())
+    newChat: (mode) => {
+      // The shell follows the mode, so a new chat continues in the one the user
+      // is already looking at instead of yanking them into another window.
+      const chat = newSession(mode ?? get().mode ?? readMode())
       set((state) => activate([chat, ...state.chats], chat))
       flushPersist()
       return chat.id
@@ -771,6 +830,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     stop: () => {
+      flushStreaming()
       if (get().chats.some((chat) => chat.streaming)) window.relaxcode.chat.abort()
     },
 
@@ -860,6 +920,8 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     handleEvent: (event) => {
+      // Every event that is not a token must see the text that came before it.
+      if (event.type !== 'delta' && event.type !== 'reasoning') flushStreaming()
       // Events belong to the chat that started the run, not to the visible one.
       const chat = get().chats.find((item) => item.requestId === event.requestId)
       if (!chat) return
@@ -900,22 +962,11 @@ export const useChatStore = create<ChatState>((set, get) => {
           break
         }
         case 'delta': {
-          patch(chatId, (session) => ({
-            ...session,
-            messages: updateStreamingMessage(session.messages, (message) =>
-              appendText(message, event.text)
-            )
-          }))
+          queueStreaming(chatId, 'text', event.text, Date.now())
           break
         }
         case 'reasoning': {
-          const at = Date.now()
-          patch(chatId, (session) => ({
-            ...session,
-            messages: updateStreamingMessage(session.messages, (message) =>
-              appendReasoning(message, event.text, at)
-            )
-          }))
+          queueStreaming(chatId, 'reasoning', event.text, Date.now())
           break
         }
         case 'reasoning-rewind': {
@@ -1209,5 +1260,5 @@ useChatStore.subscribe(() => {
   saveTimer = setTimeout(() => {
     saveTimer = null
     persist(useChatStore.getState())
-  }, 500)
+  }, 1000)
 })

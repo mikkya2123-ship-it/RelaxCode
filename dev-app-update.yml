@@ -1,0 +1,6 @@
+# Used by electron-updater only when the app runs from source (`npm run dev`).
+# Production builds get the same settings from `build.publish` in package.json,
+# which electron-builder writes into `resources/app-update.yml`.
+provider: github
+owner: mikkya2123-ship-it
+repo: RelaxCode

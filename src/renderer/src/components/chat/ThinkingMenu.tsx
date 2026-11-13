@@ -79,15 +79,14 @@ export function ThinkingMenu({
             active
               ? 'border-transparent text-foreground'
               : 'border-transparent text-tertiary hover:bg-foreground/[0.05] hover:text-foreground',
-            open && 'border-ring',
-            active && live && 'think-glow'
+            open && 'border-ring'
           )}
         >
           {active && (
             <span
               aria-hidden
               className={cn(
-                'think-rail-gradient pointer-events-none absolute inset-0',
+                'think-rail-gradient think-icon-gradient pointer-events-none absolute inset-0',
                 live ? 'think-live opacity-45' : 'opacity-20'
               )}
             />

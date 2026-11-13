@@ -90,7 +90,13 @@ export const IPC = {
   TERM_INPUT: 'term:input',
   TERM_CLOSE: 'term:close',
   TERM_STOP: 'term:stop',
-  TERM_OUTPUT: 'term:output'
+  TERM_OUTPUT: 'term:output',
+  UPDATE_STATE_GET: 'update:state-get',
+  UPDATE_CHECK: 'update:check',
+  UPDATE_DOWNLOAD: 'update:download',
+  UPDATE_INSTALL: 'update:install',
+  /** Main → renderer: the whole update state, pushed on every change. */
+  UPDATE_STATE: 'update:state'
 } as const
 
 export interface OpenFolderResult {
@@ -456,6 +462,9 @@ export type ChatEvent =
   // request is retried without it.
   | { requestId: string; type: 'notice'; kind: 'param-dropped'; param: 'reasoning' | 'sampling' | 'other' }
   | { requestId: string; type: 'notice'; kind: 'image-dropped' }
+  // An ArtCraft app (PhotoCraft etc.) was auto-connected in live mode because
+  // the agent called one of its tools and no live server existed yet.
+  | { requestId: string; type: 'notice'; kind: 'auto-connect'; app: string }
   // The design skill picked for this run; the chat shows it above the answer.
   | { requestId: string; type: 'skill'; skillId: string }
   | { requestId: string; type: 'run-snapshot'; name: string }

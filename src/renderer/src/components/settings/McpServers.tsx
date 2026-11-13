@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX } from 'react'
 import {
+  Boxes,
   ChevronDown,
   ChevronRight,
   Download,
@@ -31,7 +32,10 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { McpAppIcon } from '@/components/ui/mcp-app-icon'
+import { ArtCraftAppIcon } from '@/components/ui/artcraft-icon'
+import { ARTCRAFT_APPS } from '@shared/artcraft'
 import { SelectInput } from './controls'
+import { ArtCraftSuitePanel } from './ArtCraftSuite'
 
 /**
  * The MCP section: one card per server from `userData/mcp.json`. Everything is
@@ -330,7 +334,7 @@ export function McpServersControl(): JSX.Element {
         </p>
       )}
 
-      <AppConnectorsWizard />
+      <AppConnectorsWizard states={states ?? []} />
 
       {states?.map((state) =>
         editing === state.config.name ? null : (
@@ -407,18 +411,28 @@ export function McpServersControl(): JSX.Element {
 
 /** One-click setup for the reference connector: detect Blender, install the runtime and the addon. */
 type ConnectorApp = 'blender' | 'godot'
+type ConnectorTab = ConnectorApp | 'artcraft'
 
 const CONNECTORS: Array<{ app: ConnectorApp; label: string }> = [
   { app: 'blender', label: 'Blender' },
   { app: 'godot', label: 'Godot' }
 ]
 
+const CONNECTOR_TABS: Array<{ tab: ConnectorTab; label: string }> = [
+  { tab: 'blender', label: 'Blender' },
+  { tab: 'godot', label: 'Godot' },
+  { tab: 'artcraft', label: 'ArtCraft' }
+]
+
 /** The connect-a-desktop-app wizard: detect installed apps, register, launch. */
-function AppConnectorsWizard(): JSX.Element {
+function AppConnectorsWizard({ states }: { states: McpServerState[] }): JSX.Element {
   const t = useT()
+  const workspace = useExplorerStore((state) => state.rootPath ?? '')
   const [open, setOpen] = useState(false)
-  const [app, setApp] = useState<ConnectorApp>('blender')
+  const [tab, setTab] = useState<ConnectorTab>('blender')
+  const app: ConnectorApp = tab === 'artcraft' ? 'blender' : tab
   const [appsByApp, setAppsByApp] = useState<Partial<Record<ConnectorApp, McpDetectedApp[]>>>({})
+  const [failedByApp, setFailedByApp] = useState<Partial<Record<ConnectorApp, boolean>>>({})
   const [busy, setBusy] = useState(false)
   const [doneByApp, setDoneByApp] = useState<Partial<Record<ConnectorApp, boolean>>>({})
   const [lines, setLines] = useState<string[]>([])
@@ -430,12 +444,19 @@ function AppConnectorsWizard(): JSX.Element {
   const done = doneByApp[app] ?? false
 
   useEffect(() => {
-    if (!open || apps !== null) return
-    void window.relaxcode.mcp.detect(app).then((list) => {
-      setAppsByApp((prev) => ({ ...prev, [app]: list }))
-    })
+    if (!open || tab === 'artcraft' || apps !== null) return
+    void window.relaxcode.mcp.detect(app).then(
+      (list) => {
+        setAppsByApp((prev) => ({ ...prev, [app]: list }))
+      },
+      () => {
+        // Without this the panel spins forever: `apps` never leaves null.
+        setAppsByApp((prev) => ({ ...prev, [app]: [] }))
+        setFailedByApp((prev) => ({ ...prev, [app]: true }))
+      }
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, app, apps])
+  }, [open, tab, app, apps])
 
   useEffect(
     () =>
@@ -477,12 +498,22 @@ function AppConnectorsWizard(): JSX.Element {
         onClick={() => setOpen((value) => !value)}
       >
         <span className="flex -space-x-1.5">
-          {CONNECTORS.map((entry) => (
-            <McpAppIcon key={entry.app} name={entry.app} className="size-7 ring-2 ring-card rounded-[5px]" />
-          ))}
+          {tab === 'artcraft'
+            ? ['photocraft', 'vectorcraft', 'filmcraft', 'gridcraft'].map((id) => (
+                <ArtCraftAppIcon
+                  key={id}
+                  app={id}
+                  className="size-7 rounded-[5px] ring-2 ring-card"
+                />
+              ))
+            : CONNECTORS.map((entry) => (
+                <McpAppIcon key={entry.app} name={entry.app} className="size-7 ring-2 ring-card rounded-[5px]" />
+              ))}
         </span>
         <span className="text-[13px] font-medium">
-          {t('settings.mcp.wizard.titleApp', { app: appLabel })}
+          {tab === 'artcraft'
+            ? t('settings.mcp.artcraft.title')
+            : t('settings.mcp.wizard.titleApp', { app: appLabel })}
         </span>
         <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
           {t('settings.mcp.wizard.toggle')}
@@ -492,27 +523,43 @@ function AppConnectorsWizard(): JSX.Element {
 
       {open && (
         <div className="mt-2.5 space-y-2">
-          <div className="flex items-center gap-1.5">
-            {CONNECTORS.map((entry) => (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {CONNECTOR_TABS.map((entry) => (
               <button
-                key={entry.app}
+                key={entry.tab}
                 type="button"
-                onClick={() => setApp(entry.app)}
+                onClick={() => setTab(entry.tab)}
                 className={cn(
                   'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] transition-colors',
-                  entry.app === app
+                  entry.tab === tab
                     ? 'border-ring/60 bg-card text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 )}
               >
-                <McpAppIcon name={entry.app} className="size-5" />
+                {entry.tab === 'artcraft' ? (
+                  <Boxes className="size-5 text-muted-foreground" />
+                ) : (
+                  <McpAppIcon name={entry.tab} className="size-5" />
+                )}
                 {entry.label}
+                {entry.tab === 'artcraft' && (
+                  <span className="rounded-full bg-muted px-1.5 py-px text-[9px] text-muted-foreground">
+                    {ARTCRAFT_APPS.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
 
+          {tab === 'artcraft' ? (
+            <ArtCraftSuitePanel states={states} workspace={workspace} />
+          ) : (
+            <>
           {apps === null && <p className="text-[11px] text-muted-foreground">{t('settings.mcp.wizard.detectingApp', { app: appLabel })}</p>}
-          {apps !== null && apps.length === 0 && (
+          {failedByApp[app] && (
+            <p className="text-[11px] text-destructive">{t('settings.mcp.wizard.detectFailed')}</p>
+          )}
+          {apps !== null && apps.length === 0 && !failedByApp[app] && (
             <p className="text-[11px] text-muted-foreground">
               {t('settings.mcp.wizard.notFoundApp', { app: appLabel })}
             </p>
@@ -587,6 +634,8 @@ function AppConnectorsWizard(): JSX.Element {
             <pre className="max-h-[160px] overflow-y-auto whitespace-pre-wrap rounded bg-muted/60 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground">
               {lines.join('\n')}
             </pre>
+          )}
+            </>
           )}
         </div>
       )}

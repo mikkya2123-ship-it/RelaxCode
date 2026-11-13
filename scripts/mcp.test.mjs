@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
   applyMcpSchemaBudget,
   clampMcpDescription,
+  MCP_NAME_RE,
   mcpResultToText,
   mcpToolEnabled,
   mcpToolFullName,
@@ -18,6 +19,21 @@ import {
   serializeMcpExport,
   toolRiskFor
 } from '../src/shared/mcp.ts'
+import {
+  ARTCRAFT_APPS,
+  ARTCRAFT_PARTNER_LETTER,
+  artCraftBridgeMcpArgs,
+  artCraftBridgePort,
+  artCraftBridgeTokenFile,
+  artCraftControlArgs,
+  artCraftGrantedRoot,
+  artCraftMcpArgs,
+  artCraftPlaybook,
+  artCraftServerMode,
+  artCraftServerName,
+  isArtCraftAppId,
+  sameArtCraftFolder
+} from '../src/shared/artcraft.ts'
 
 let failed = 0
 function check(label, condition, extra) {
@@ -41,6 +57,117 @@ check('the default timeout is one minute', bare?.timeoutMs === 60000)
 check('args survive normalisation', JSON.stringify(bare?.args) === JSON.stringify(['blender-mcp@latest']))
 
 check('an entry without a command is unusable', normalizeMcpServer({ args: ['x'] }, 'x') === null)
+
+/* --------------------------------------------------------- ArtCraft suite */
+
+check('the suite catalog lists every app', ARTCRAFT_APPS.length === 17, ARTCRAFT_APPS.length)
+check(
+  'app ids are unique and valid MCP server names',
+  new Set(ARTCRAFT_APPS.map((app) => app.id)).size === ARTCRAFT_APPS.length &&
+    ARTCRAFT_APPS.every((app) => MCP_NAME_RE.test(artCraftServerName(app.id)))
+)
+check(
+  'every app has a repository, a page and playbook notes',
+  ARTCRAFT_APPS.every(
+    (app) => app.repo.startsWith('https://') && app.site.startsWith('https://') && app.notes.length > 40
+  )
+)
+check('an unknown app id is rejected', !isArtCraftAppId('not-a-craft-app') && isArtCraftAppId('photocraft'))
+
+check(
+  'PhotoCraft grants both automation roots',
+  JSON.stringify(artCraftMcpArgs('photocraft', 'D:\\work')) ===
+    JSON.stringify([
+      'mcp',
+      '--automation-read-root',
+      'D:\\work',
+      '--automation-write-root',
+      'D:\\work'
+    ])
+)
+check(
+  'PdfCraft takes one root',
+  JSON.stringify(artCraftMcpArgs('pdfcraft', '/work')) ===
+    JSON.stringify(['mcp', '--root', '/work'])
+)
+check(
+  'TextureCraft takes read and write roots',
+  JSON.stringify(artCraftMcpArgs('texturecraft', '/work')) ===
+    JSON.stringify(['mcp', '--read-root', '/work', '--write-root', '/work'])
+)
+check(
+  'LightCraft takes the folder positionally',
+  JSON.stringify(artCraftMcpArgs('lightcraft', '/work')) === JSON.stringify(['mcp', '/work'])
+)
+check(
+  'FilmCraft has no confinement flags',
+  JSON.stringify(artCraftMcpArgs('filmcraft', '/work')) === JSON.stringify(['mcp'])
+)
+check(
+  'no workspace means no granted roots',
+  JSON.stringify(artCraftMcpArgs('photocraft', '  ')) === JSON.stringify(['mcp'])
+)
+
+const photoPlaybook = artCraftPlaybook('photocraft', 'D:\\work')
+check(
+  'the playbook names the app, its tools and its folder',
+  photoPlaybook.includes('PhotoCraft') &&
+    photoPlaybook.includes('mcp__photocraft__') &&
+    photoPlaybook.includes('D:\\work') &&
+    photoPlaybook.includes('https://github.com/storytold/photocraft')
+)
+check(
+  'a headless playbook explains that its document is separate from the UI',
+  photoPlaybook.includes('headless') && photoPlaybook.includes('separate from any window')
+)
+const livePlaybook = artCraftPlaybook('photocraft', 'D:\\work', 'live')
+check(
+  'a live playbook points the agent at the open window and UI tools',
+  livePlaybook.includes('bridged to the running PhotoCraft window') &&
+    livePlaybook.includes('ui_inspect') &&
+    livePlaybook.includes('doc_save')
+)
+check(
+  'the granted root is read back from the registered arguments',
+  artCraftGrantedRoot('photocraft', artCraftMcpArgs('photocraft', 'D:\\work')) === 'D:\\work' &&
+    artCraftGrantedRoot('pdfcraft', artCraftMcpArgs('pdfcraft', '/work')) === '/work' &&
+    artCraftGrantedRoot('lightcraft', artCraftMcpArgs('lightcraft', '/work')) === '/work' &&
+    artCraftGrantedRoot('photocraft', ['mcp']) === null
+)
+const bridgeArgs = artCraftBridgeMcpArgs('photocraft', 7878, 'C:\\secret\\control.token')
+check(
+  'the bridge command line carries the port and token file',
+  artCraftServerMode(bridgeArgs) === 'live' &&
+    artCraftBridgePort(bridgeArgs) === 7878 &&
+    artCraftBridgeTokenFile(bridgeArgs) === 'C:\\secret\\control.token' &&
+    artCraftGrantedRoot('photocraft', bridgeArgs) === null
+)
+const controlArgs = artCraftControlArgs('photocraft', 7878, 'C:\\secret\\control.token', 'D:\\work')
+check(
+  'the desktop launch opens the control channel and grants the workspace',
+  controlArgs.includes('--control') &&
+    controlArgs.includes('7878') &&
+    controlArgs.includes('--automation-read-root') &&
+    controlArgs.includes('--automation-write-root') &&
+    controlArgs.filter((arg) => arg === 'D:\\work').length === 2 &&
+    !controlArgs.includes('mcp')
+)
+check(
+  'a bare port is accepted as a bridge address',
+  artCraftBridgePort(['mcp', '--bridge', '7878']) === 7878 &&
+    artCraftBridgePort(['mcp', '--bridge', '127.0.0.1:99999']) === null
+)
+check(
+  'folder comparison is platform-aware and ignores a trailing separator',
+  sameArtCraftFolder('D:\\work', 'd:\\work\\') &&
+    sameArtCraftFolder('/home/me/work/', '/home/me/work') &&
+    !sameArtCraftFolder('/home/me/work', '/home/me/WORK') &&
+    !sameArtCraftFolder('', 'D:\\work')
+)
+check(
+  'the partnership letter covers the suite',
+  ARTCRAFT_APPS.every((app) => ARTCRAFT_PARTNER_LETTER.includes(app.label))
+)
 check(
   'a bad name is rejected',
   normalizeMcpServer({ command: 'x' }, 'bad name!') === null

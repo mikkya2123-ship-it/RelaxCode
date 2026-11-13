@@ -150,20 +150,19 @@
       rgb(255 255 255 / 0.05) 30px,
       transparent 60px
     );
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.5),
-      inset 0 0 0 1px rgb(255 255 255 / 0.07);
+    /* Only the top edge cap: the dock has no bottom border of its own, so a
+       full inset ring doubles the side borders into smudged corners. */
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.5);
   }
-  .dark .liquid-glass [data-slot='terminal-panel']::after {
+  .dark.liquid-glass [data-slot='terminal-panel']::after {
+    /* Dark theme: keep only the crisp top edge line — the wide wash under it
+       reads as the line glowing down into the terminal body. */
     background: linear-gradient(
       180deg,
-      rgb(255 255 255 / 0.1),
-      rgb(255 255 255 / 0.03) 30px,
-      transparent 60px
+      rgb(255 255 255 / 0.06),
+      transparent 2px
     );
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.28),
-      inset 0 0 0 1px rgb(255 255 255 / 0.05);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.22);
   }
   /* Inputs and selects get the same cap; input-specific tweaks: a narrower
    * focus-ring interplay means the highlight sits under the border, and the
@@ -206,30 +205,45 @@
       inset 0 0 0 0.5px rgb(18 18 26 / 0.1);
   }
 
-  .dark .liquid-glass [data-slot='input']::after,
-  .dark .liquid-glass [data-slot='textarea']::after,
-  .dark .liquid-glass [data-slot='select-trigger']::after {
+  /* Dark theme: the terminal-style top edge line, drawn by a pseudo-element
+     that inherits the corner radius — a straight inset line would poke past
+     the rounded corners. */
+  .dark.liquid-glass .composer-frame::before,
+  .dark.liquid-glass [data-slot='select-trigger']::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
     background: linear-gradient(
       180deg,
-      rgb(255 255 255 / 0.1),
-      rgb(255 255 255 / 0.03) 42%,
-      transparent 58%
+      rgb(255 255 255 / 0.07),
+      transparent 2px
     );
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.22),
-      inset 0 0 0 1px rgb(255 255 255 / 0.04);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.22);
   }
 
-  .dark .liquid-glass [data-slot='button']::after {
+  .dark.liquid-glass [data-slot='input']::after,
+  .dark.liquid-glass [data-slot='textarea']::after,
+  .dark.liquid-glass [data-slot='select-trigger']::after {
+    /* Dark theme: top edge line only, like the buttons and the terminal. */
     background: linear-gradient(
       180deg,
-      rgb(255 255 255 / 0.13),
-      rgb(255 255 255 / 0.04) 42%,
-      transparent 58%
+      rgb(255 255 255 / 0.06),
+      transparent 2px
     );
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.3),
-      inset 0 0 0 1px rgb(255 255 255 / 0.05);
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.22);
+  }
+
+  .dark.liquid-glass [data-slot='button']::after {
+    /* Dark theme: same treatment as the terminal dock — a crisp line on the
+       top edge only; the tall wash reads as haze on a dark button. */
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.07),
+      transparent 2px
+    );
+    box-shadow: inset 0 1px 0 0 rgb(255 255 255 / 0.28);
   }
 
   /* The tray popup window is transparent: its rounded corners are drawn by
@@ -357,6 +371,23 @@
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ------------------------------------------------------------------- *
+ * Long lists — a transcript, a catalogue of providers, a model picker, a
+ * file tree. Rows that are scrolled out of view skip layout and paint
+ * entirely; `auto` keeps the size a row had the last time it was measured,
+ * so the scrollbar never jumps while they are skipped.
+ * ------------------------------------------------------------------- */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
+}
+
+/* The same, for one-line rows of a fixed compact height. */
+.cv-line {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
 }
 
 @keyframes ec-fade-in {
@@ -540,6 +571,56 @@
  * the way light moves on water.
  * ------------------------------------------------------------------- */
 
+/* The effort colors are registered as real color properties so the rail
+   recolors smoothly: a plain custom property snaps, a registered one
+   interpolates, and the transition below rides on that. */
+@property --think-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(236 62% 56%);
+}
+@property --think-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(252 66% 58%);
+}
+@property --think-3 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(272 68% 58%);
+}
+@property --think-4 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(294 66% 58%);
+}
+@property --think-5 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(328 70% 58%);
+}
+@property --think-6 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsl(12 80% 58%);
+}
+@property --think-glow {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: hsla(300 70% 60% / 0.35);
+}
+
+.think-slider {
+  transition:
+    --think-1 0.6s ease,
+    --think-2 0.6s ease,
+    --think-3 0.6s ease,
+    --think-4 0.6s ease,
+    --think-5 0.6s ease,
+    --think-6 0.6s ease,
+    --think-glow 0.6s ease;
+}
+
 .think-rail-gradient {
   background-image: linear-gradient(
     90deg,
@@ -561,6 +642,39 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
     inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* The rail recolors itself to match the chosen effort level: asleep gray for
+   "off", a calm green ramp for "low", a cool blue one for "medium" — the
+   default purple-to-orange stays for "high". */
+.think-slider[data-think='off'] {
+  --think-1: hsl(240 4% 38%);
+  --think-2: hsl(240 4% 43%);
+  --think-3: hsl(240 4% 48%);
+  --think-4: hsl(240 4% 53%);
+  --think-5: hsl(240 4% 58%);
+  --think-6: hsl(240 4% 63%);
+  --think-glow: hsla(240 4% 55% / 0.3);
+}
+
+.think-slider[data-think='low'] {
+  --think-1: hsl(152 45% 42%);
+  --think-2: hsl(152 52% 47%);
+  --think-3: hsl(150 56% 52%);
+  --think-4: hsl(146 58% 57%);
+  --think-5: hsl(142 62% 62%);
+  --think-6: hsl(138 66% 67%);
+  --think-glow: hsla(150 60% 55% / 0.35);
+}
+
+.think-slider[data-think='medium'] {
+  --think-1: hsl(206 66% 48%);
+  --think-2: hsl(206 72% 54%);
+  --think-3: hsl(204 76% 60%);
+  --think-4: hsl(202 80% 65%);
+  --think-5: hsl(200 82% 70%);
+  --think-6: hsl(198 84% 74%);
+  --think-glow: hsla(204 78% 60% / 0.35);
 }
 
 .dark .think-rail-gradient {
@@ -674,13 +788,22 @@
   animation-duration: 3.6s;
 }
 
+/* The effort badge carries the same rail gradient as the slider, but at icon
+   size the composited sweep layers can paint past an overflow-hidden rounded
+   clip — a hard clip-path on the layer itself is the reliable fence. */
+.think-icon-gradient {
+  clip-path: inset(0 round 6px);
+}
+
 @keyframes ec-think-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 var(--think-glow);
+    box-shadow: 0 0 0 0 transparent;
   }
   50% {
-    box-shadow: 0 0 0 5px var(--think-glow);
+    /* Feathered, not a hard spread ring — a 5px solid ring reads as the
+       gradient leaking out of the button. */
+    box-shadow: 0 0 7px 1px var(--think-glow);
   }
 }
 
@@ -694,8 +817,8 @@
   left: calc(8px + var(--think-at, 0) * (100% - 16px));
   z-index: 1;
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   box-shadow:
     0 1px 4px rgba(0, 0, 0, 0.3),
     inset 0 0 0 1px rgba(255, 255, 255, 0.3);
@@ -712,8 +835,13 @@
 }
 
 .dark .think-thumb {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  /* On dark the bright handle reads like it glows downward; keep the ring on
+     the edge itself, without the light bleeding into the rail below it. */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    inset 0 0 0 0 rgba(255, 255, 255, 0);
 }
 
 /* While held, the handle follows the pointer without any easing — it must sit

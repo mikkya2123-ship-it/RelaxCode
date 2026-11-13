@@ -1,0 +1,179 @@
+
+> relaxcode@0.2.0 dist
+> npm run build && electron-builder --win
+
+
+> relaxcode@0.2.0 build
+> electron-vite build
+
+[36mvite v8.3.4 [32mbuilding ssr environment for production...[36m[39m
+transforming...
+✓ 81 modules transformed.
+rendering chunks...
+out/main/index.js  1,175.31 kB
+
+[33m[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/main/mcp.ts is dynamically imported by src/main/agent.ts but also statically imported by src/main/agent.ts, src/main/apps.ts, src/main/blender-palette.ts, src/main/index.ts, src/main/tools.ts, dynamic import will not move module into another chunk.
+[39m
+[32m✓ built in 982ms[39m
+[36mvite v8.3.4 [32mbuilding ssr environment for production...[36m[39m
+transforming...
+✓ 16 modules transformed.
+rendering chunks...
+out/preload/index.js  186.66 kB
+
+[32m✓ built in 51ms[39m
+[36mvite v8.3.4 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 4048 modules transformed.
+rendering chunks...
+out/renderer/index.html                                                 0.71 kB
+out/renderer/assets/gridcraft-BpKjLPZi.png                              4.78 kB
+out/renderer/assets/deckcraft-DFtHAuRh.png                              4.79 kB
+out/renderer/assets/soundcraft-CyhSgB0N.png                             7.89 kB
+out/renderer/assets/cadcraft-DYHJaY5n.png                               8.06 kB
+out/renderer/assets/manrope-vietnamese-wght-normal-usUDDRr7.woff2       8.52 kB
+out/renderer/assets/manrope-greek-wght-normal-DL7QRZyv.woff2            9.44 kB
+out/renderer/assets/solidcraft-CR5KLa8m.png                             9.60 kB
+out/renderer/assets/manrope-cyrillic-wght-normal-Dvxsihut.woff2        14.50 kB
+out/renderer/assets/texturecraft-DNuHjUgk.png                          14.91 kB
+out/renderer/assets/materialcraft-De1QNt8O.png                         15.06 kB
+out/renderer/assets/manrope-latin-ext-wght-normal-Ch3YOpNY.woff2       15.12 kB
+out/renderer/assets/craft-anything-DCIia8y1.png                        15.74 kB
+out/renderer/assets/designcraft-BdxGmx7B.png                           16.19 kB
+out/renderer/assets/lightcraft-D9vrknkM.png                            16.63 kB
+out/renderer/assets/filmcraft-CcpRNe-s.png                             17.15 kB
+out/renderer/assets/pdfcraft-BACDA8ip.png                              17.29 kB
+out/renderer/assets/effectcraft-BNl40TUO.png                           17.30 kB
+out/renderer/assets/vectorcraft-P8HmEvTR.png                           18.45 kB
+out/renderer/assets/figcraft-DCGj2J_f.png                              19.69 kB
+out/renderer/assets/photocraft-QUAORjel.png                            19.87 kB
+out/renderer/assets/manrope-latin-wght-normal-DHIcAJRg.woff2           24.83 kB
+out/renderer/assets/codicon-DF1abBS2.ttf                              153.22 kB
+out/renderer/assets/app-logo-dark-BkrSbZP4.png                        673.80 kB
+out/renderer/assets/json.worker-Cf5QJNgF.js                           879.43 kB
+out/renderer/assets/app-logo-light-d_d2LLdy.png                     1,219.81 kB
+out/renderer/assets/html.worker-CuKc8SMn.js                         1,237.37 kB
+out/renderer/assets/css.worker-C-lynN6T.js                          1,734.73 kB
+out/renderer/assets/ts.worker-h5HLmVta.js                          11,614.97 kB
+out/renderer/assets/EditorPaneInner-CJc0byHM.css                      114.97 kB
+out/renderer/assets/index-6kbOT8sF.css                                118.18 kB
+out/renderer/assets/editor-CXfYqUZ6.css                               132.60 kB
+out/renderer/assets/azcli-BueKBzxs.js                                   1.10 kB
+out/renderer/assets/javascript-AbtuwW8T.js                              1.19 kB
+out/renderer/assets/ini-DTIBAIdj.js                                     1.45 kB
+out/renderer/assets/csp-DZYL_xxv.js                                     1.54 kB
+out/renderer/assets/workers-Dt72u_7S.js                                 2.06 kB
+out/renderer/assets/pla-BzbPIlnr.js                                     2.31 kB
+out/renderer/assets/sb-BqfWChAd.js                                      2.35 kB
+out/renderer/assets/bat-BtlR8kz3.js                                     2.37 kB
+out/renderer/assets/scheme-BjwWTE9E.js                                  2.39 kB
+out/renderer/assets/flow9-CKzEwGTQ.js                                   2.44 kB
+out/renderer/assets/xml-XpEtE3vQ.js                                     2.65 kB
+out/renderer/assets/dockerfile-niVMWbHT.js                              2.72 kB
+out/renderer/assets/pascaligo-Bz6BidB6.js                               2.73 kB
+out/renderer/assets/lua-69F9fsQp.js                                     2.89 kB
+out/renderer/assets/graphql-BL1d50Hm.js                                 2.94 kB
+out/renderer/assets/cameligo-CwhtnMfj.js                                3.02 kB
+out/renderer/assets/lexon-7qu52rqi.js                                   3.20 kB
+out/renderer/assets/objective-c-BVrbesWk.js                             3.24 kB
+out/renderer/assets/sparql-Bss3ZStT.js                                  3.37 kB
+out/renderer/assets/mips-CqOBgpd3.js                                    3.38 kB
+out/renderer/assets/go-BLS0Z9bs.js                                      3.60 kB
+out/renderer/assets/sophia-BJQ32VCf.js                                  3.61 kB
+out/renderer/assets/bicep-DE5WZgyW.js                                   3.65 kB
+out/renderer/assets/m3-hTbrTun5.js                                      3.82 kB
+out/renderer/assets/fsharp-BTSv1ki3.js                                  3.91 kB
+out/renderer/assets/pascal-BaYlZPqj.js                                  4.01 kB
+out/renderer/assets/typespec-C_i0mO2g.js                                4.06 kB
+out/renderer/assets/shell-D_QsW6SA.js                                   4.15 kB
+out/renderer/assets/r-DP1TVdnp.js                                       4.15 kB
+out/renderer/assets/java-BibXeV5m.js                                    4.23 kB
+out/renderer/assets/qsharp-CkbrUwot.js                                  4.32 kB
+out/renderer/assets/powershell-CmjV5C9L.js                              4.41 kB
+out/renderer/assets/hcl-CMpHa-Qa.js                                     4.47 kB
+out/renderer/assets/kotlin-rou37MqY.js                                  4.52 kB
+out/renderer/assets/cypher-DkTxC-V3.js                                  4.55 kB
+out/renderer/assets/redis-mHx2F3O-.js                                   4.63 kB
+out/renderer/assets/yaml-CazUa2i8.js                                    4.64 kB
+out/renderer/assets/liquid-ChUwh8QP.js                                  4.69 kB
+out/renderer/assets/tcl-B3iXI0vO.js                                     4.74 kB
+out/renderer/assets/coffee-BL_gkiBX.js                                  4.93 kB
+out/renderer/assets/less-DL9aHh-v.js                                    4.97 kB
+out/renderer/assets/markdown-t5CK9nzS.js                                5.04 kB
+out/renderer/assets/restructuredtext-DjOTvjGi.js                        5.20 kB
+out/renderer/assets/cssMode-CsV50lqW.js                                 5.23 kB
+out/renderer/assets/apex-DJWJJ94E.js                                    5.32 kB
+out/renderer/assets/python-B5JrjOrP.js                                  5.38 kB
+out/renderer/assets/rust-Be4EdzRq.js                                    5.53 kB
+out/renderer/assets/dart-BIEhpB6b.js                                    5.54 kB
+out/renderer/assets/css-CExYsIB1.js                                     5.83 kB
+out/renderer/assets/mdx-BXYc0C8B.js                                     6.07 kB
+out/renderer/assets/csharp-zdzSZoGX.js                                  6.12 kB
+out/renderer/assets/htmlMode-CuDDRN0O.js                                6.15 kB
+out/renderer/assets/html-CsH1tEx0.js                                    6.22 kB
+out/renderer/assets/msdax-Mu5hasat.js                                   6.30 kB
+out/renderer/assets/swift-KqI1vnUF.js                                   6.53 kB
+out/renderer/assets/typescript-BnY9xRGI.js                              6.60 kB
+out/renderer/assets/pug-DtzEKYbg.js                                     6.68 kB
+out/renderer/assets/cpp-o60F7HPm.js                                     6.94 kB
+out/renderer/assets/ecl-DvhxziJS.js                                     7.07 kB
+out/renderer/assets/vb-DXI76xeI.js                                      7.43 kB
+out/renderer/assets/twig-C6pvpK6c.js                                    8.00 kB
+out/renderer/assets/wgsl-BsivhlYM.js                                    8.29 kB
+out/renderer/assets/handlebars-36WUHmwz.js                              8.36 kB
+out/renderer/assets/scss-CM1fVVyf.js                                    8.38 kB
+out/renderer/assets/julia-CymIWxRw.js                                   9.75 kB
+out/renderer/assets/systemverilog-DBa0uYAR.js                           9.85 kB
+out/renderer/assets/st-BaWYkEdZ.js                                      9.87 kB
+out/renderer/assets/scala-Na7rvtRh.js                                   9.95 kB
+out/renderer/assets/php-C8_8alL-.js                                    10.44 kB
+out/renderer/assets/postiats-CGFxKu15.js                               10.77 kB
+out/renderer/assets/perl-CBCocOvt.js                                   10.87 kB
+out/renderer/assets/razor-CEsZGjZM.js                                  11.15 kB
+out/renderer/assets/ruby-THC_P5Cj.js                                   11.26 kB
+out/renderer/assets/clojure-m-OLxXLv.js                                12.14 kB
+out/renderer/assets/protobuf-DAJDbDNp.js                               12.27 kB
+out/renderer/assets/elixir-D9hXg5yA.js                                 12.65 kB
+out/renderer/assets/sql-Bf91wk7V.js                                    13.06 kB
+out/renderer/assets/mysql-DeGRW2MH.js                                  14.18 kB
+out/renderer/assets/redshift-DnKJaUgZ.js                               14.45 kB
+out/renderer/assets/pgsql-DWPWcf96.js                                  16.23 kB
+out/renderer/assets/abap-BBOyZ_Jb.js                                   18.20 kB
+out/renderer/assets/powerquery-CP7Cljr3.js                             19.90 kB
+out/renderer/assets/freemarker2-DEePb3rV.js                            21.30 kB
+out/renderer/assets/solidity-CXZ6dms6.js                               22.93 kB
+out/renderer/assets/jsonMode-mm7hnQZu.js                               26.07 kB
+out/renderer/assets/tsMode-CNvYDAPm.js                                 36.02 kB
+out/renderer/assets/lspLanguageFeatures-Bw2HoTEJ.js                    74.79 kB
+out/renderer/assets/EditorPaneInner-CPHuHc-l.js                     2,356.73 kB
+out/renderer/assets/index-Be4IpS2c.js                               3,308.14 kB
+out/renderer/assets/editor.api--MZoSSGP.js                          5,062.82 kB
+
+[32m✓ built in 7.83s[39m
+[33m[33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 7.1s of this 7.8s build (91%).
+The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+  - plugin @tailwindcss/vite:generate:build transform (50%, 3.9s, 102 calls)
+  - plugin vite:css transform (41%, 3.2s, 102 calls)
+Additional callback time came from the callbacks below and from callbacks under 1s.
+2 callbacks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
+  - plugin vite:asset load (259 calls)
+  - plugin vite:worker-import-meta-url transform (4 calls)
+See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+[39m
+  • electron-builder  version=26.18.0 os=10.0.26200
+  • loaded configuration  file=package.json ("build" field)
+  • executing @electron/rebuild  electronVersion=44.9.0 arch=x64 buildFromSource=false workspaceRoot=D:\Project\RelaxCode projectDir=./ appDir=./
+  • installing native dependencies  arch=x64
+  • completed installing native dependencies
+  • packaging       platform=win32 arch=x64 electron=44.9.0 appOutDir=dist\win-unpacked
+  • downloaded      label=electron progress=100%
+  • downloaded electron zip extracted successfully  output=D:\Project\RelaxCode\dist\win-unpacked
+  • searching for node modules  pm=npm searchDir=D:\Project\RelaxCode
+  • duplicate dependency references  dependencies=["ajv@8.20.0","express@5.3.0","mime-types@3.0.2","debug@4.4.3","http-errors@2.0.1","iconv-lite@0.7.3","on-finished@2.4.2","qs@6.16.1","raw-body@3.0.2","type-is@2.1.0","debug@4.4.3","debug@4.4.3","on-finished@2.4.2","get-intrinsic@1.3.0","call-bind-apply-helpers@1.0.2","call-bind-apply-helpers@1.0.2","es-object-atoms@1.1.2","call-bound@1.0.4","get-intrinsic@1.3.0","side-channel-map@1.0.1","debug@4.4.3","debug@4.4.3","http-errors@2.0.1","mime-types@3.0.2","on-finished@2.4.2","send@1.2.1","mime-types@3.0.2","http-errors@2.0.1","debug@4.4.3","react-dom@19.3.1"]
+  • updating asar integrity executable resource  executablePath=dist\win-unpacked\RelaxCode.exe
+  • no code signing certificate configured, signing is skipped  path=dist\win-unpacked\RelaxCode.exe
+  • building        target=nsis file=dist\RelaxCode-Setup-0.2.0.exe archs=x64 oneClick=false perMachine=false
+  • no code signing certificate configured, signing is skipped  path=C:\Users\Misha\AppData\Local\Temp\t-QvB5kQ\elevate-staging-1\resources\elevate.exe
+  • uninstaller is not signed by electron-builder  reason=custom NSIS script is used
+  • no code signing certificate configured, signing is skipped  path=dist\RelaxCode-Setup-0.2.0.exe
+  • building block map  blockMapFile=dist\RelaxCode-Setup-0.2.0.exe.blockmap

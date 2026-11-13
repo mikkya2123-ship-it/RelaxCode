@@ -90,3 +90,62 @@ export function selectSkill(request: string, catalog: readonly Skill[] = SKILLS)
   if (!best || best.score < MIN_SCORE) return null
   return best.skill
 }
+
+/**
+ * A loose form of an id or title: lower case, ё folded, runs of separators
+ * collapsed into single dashes. "Blender: Render", "blender render" and
+ * "BLENDER_RENDER" all become "blender-render".
+ */
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-z0-9а-я]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * Resolves what the model passed to `use_skill` into a skill.
+ *
+ * A model may send the id exactly, the English or Russian title, an id with
+ * underscores or capitals, or just describe the domain ("3d website"). None of
+ * those may end up as a red cross in the chat: the id and the titles are
+ * matched exactly first, then by containment (shortest match wins, so
+ * "threejs" does not jump to "threejs-postprocessing"), and a description is
+ * ranked by the same triggers that pick the skill automatically.
+ */
+export function findSkill(query: string, catalog: readonly Skill[] = SKILLS): Skill | null {
+  const text = query.trim()
+  if (text.length === 0) return null
+  const needle = slugify(text)
+  if (needle.length === 0) return null
+
+  const byId = catalog.find((skill) => slugify(skill.id) === needle)
+  if (byId) return byId
+
+  const byTitle = catalog.find(
+    (skill) => slugify(skill.titleEn) === needle || slugify(skill.title) === needle
+  )
+  if (byTitle) return byTitle
+
+  const containing = catalog.filter((skill) => {
+    const id = slugify(skill.id)
+    return id.includes(needle) || needle.includes(id)
+  })
+  if (containing.length > 0) {
+    return [...containing].sort((a, b) => a.id.length - b.id.length)[0] ?? null
+  }
+
+  const byTitlePart = catalog.filter((skill) => {
+    const title = slugify(skill.titleEn)
+    return title.includes(needle) || needle.includes(title)
+  })
+  if (byTitlePart.length > 0) {
+    return [...byTitlePart].sort((a, b) => a.id.length - b.id.length)[0] ?? null
+  }
+
+  // Not an id at all: treat it as a description of the task.
+  const [best] = rankSkills(text, catalog)
+  return best?.skill ?? null
+}

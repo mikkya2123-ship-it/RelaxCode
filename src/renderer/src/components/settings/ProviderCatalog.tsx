@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { ArrowLeft, ChevronRight, ExternalLink, Loader2, Plus, Search } from 'lucide-react'
 import {
   CUSTOM_PROVIDER_BASE_URL,
@@ -39,16 +39,22 @@ const SEARCH_INDEX = PROVIDER_CATALOG.map((provider) => ({
 interface ProviderRowProps {
   provider: CatalogProvider
   format: (value: number) => string
-  onPick: () => void
+  onPick: (provider: CatalogProvider) => void
 }
 
-function ProviderRow({ provider, format, onPick }: ProviderRowProps): JSX.Element {
+/**
+ * One catalogue row. Memoized and opted into `content-visibility`, because the
+ * catalogue holds several hundred providers: only the rows on screen are laid
+ * out and painted, and a re-render (a search keystroke, a new locale) reuses
+ * the rows whose provider did not change.
+ */
+const ProviderRow = memo(function ProviderRow({ provider, format, onPick }: ProviderRowProps): JSX.Element {
   return (
     <button
       type="button"
       data-testid={`provider-row-${provider.id}`}
-      onClick={onPick}
-      className="group flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-accent focus-visible:bg-accent"
+      onClick={() => onPick(provider)}
+      className="cv-auto group flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-accent focus-visible:bg-accent"
     >
       <ProviderLogo id={provider.id} className="text-foreground/85" />
       <span className="min-w-0 flex-1">
@@ -67,7 +73,7 @@ function ProviderRow({ provider, format, onPick }: ProviderRowProps): JSX.Elemen
       <ChevronRight className="size-3.5 shrink-0 text-tertiary transition-transform duration-150 group-hover:translate-x-0.5" />
     </button>
   )
-}
+})
 
 interface AddProviderDialogProps {
   open: boolean
@@ -90,7 +96,11 @@ export function AddProviderDialog({
   const translateError = useTranslateSettingsError()
   const locale = useI18nStore((state) => state.locale)
   const apply = useSettingsStore((state) => state.apply)
-  const formatCount = (value: number): string => new Intl.NumberFormat(locale).format(value)
+  // Both are handed to the memoized rows, so they must not change per render.
+  const formatCount = useCallback(
+    (value: number): string => new Intl.NumberFormat(locale).format(value),
+    [locale]
+  )
 
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<CatalogProvider | 'custom' | null>(null)
@@ -136,7 +146,7 @@ export function AddProviderDialog({
     ].filter((group) => group.items.length > 0)
   }, [query, t])
 
-  const pick = (provider: CatalogProvider | 'custom'): void => {
+  const pick = useCallback((provider: CatalogProvider | 'custom'): void => {
     setPicked(provider)
     setApiKey('')
     if (provider === 'custom') {
@@ -149,7 +159,7 @@ export function AddProviderDialog({
     setName(provider.name)
     setBaseUrl(provider.baseUrl)
     setModel(provider.top[0] ?? '')
-  }
+  }, [])
 
   const trimmedUrl = baseUrl.trim()
   const normalizedUrl = normalizeBaseUrl(baseUrl)
@@ -292,7 +302,7 @@ export function AddProviderDialog({
                       key={provider.id}
                       provider={provider}
                       format={formatCount}
-                      onPick={() => pick(provider)}
+                      onPick={pick}
                     />
                   ))}
                 </div>

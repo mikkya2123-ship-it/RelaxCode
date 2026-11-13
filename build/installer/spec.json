@@ -1,0 +1,1265 @@
+{
+  "assetsDir": "D:\\Project\\RelaxCode\\build\\installer\\assets",
+  "previewDir": "D:\\Project\\RelaxCode\\build\\installer\\preview",
+  "fontFile": "D:\\Project\\RelaxCode\\build\\installer\\fonts\\Manrope.ttf",
+  "files": [
+    {
+      "name": "cb-off.bmp",
+      "width": 20,
+      "height": 20,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 20,
+          "h": 20,
+          "fill": "#17171a"
+        },
+        {
+          "t": "round",
+          "x": 1,
+          "y": 1,
+          "w": 18,
+          "h": 18,
+          "r": 6,
+          "fill": "#1d1d21",
+          "stroke": "#33333a",
+          "sw": 1
+        }
+      ]
+    },
+    {
+      "name": "cb-on.bmp",
+      "width": 20,
+      "height": 20,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 20,
+          "h": 20,
+          "fill": "#17171a"
+        },
+        {
+          "t": "round",
+          "x": 1,
+          "y": 1,
+          "w": 18,
+          "h": 18,
+          "r": 6,
+          "fill": "#ececf0",
+          "stroke": null,
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 5,
+          "y": 7,
+          "size": 10,
+          "color": "#1a1a1d",
+          "sw": 2
+        }
+      ]
+    },
+    {
+      "name": "page-welcome-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "grad",
+          "x": 0,
+          "y": 0,
+          "w": 360,
+          "h": 564,
+          "from": "#1d1d21",
+          "to": "#17171a"
+        },
+        {
+          "t": "line",
+          "x1": 360,
+          "y1": 0,
+          "x2": 360,
+          "y2": 564,
+          "color": "#2e2e34",
+          "sw": 1
+        },
+        {
+          "t": "glow",
+          "cx": 180,
+          "cy": 310,
+          "rx": 150,
+          "ry": 150,
+          "color": "#7a6eff24"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\icon-256.png",
+          "x": 48,
+          "y": 48,
+          "w": 84,
+          "h": 84
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode",
+          "x": 148,
+          "y": 74,
+          "size": 22,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 65,
+          "y": 195,
+          "w": 230,
+          "h": 230
+        },
+        {
+          "t": "text",
+          "text": "v0.2.0",
+          "x": 180,
+          "y": 468,
+          "size": 13,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "Добро пожаловать",
+          "x": 420,
+          "y": 142,
+          "size": 28,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "в RelaxCode",
+          "x": 420,
+          "y": 180,
+          "size": 28,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Настольная IDE с ИИ-агентом: файлы и команды,",
+          "x": 420,
+          "y": 246,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "интернет, схемы и 3D — в одном окне.",
+          "x": 420,
+          "y": 270,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 330,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 336,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "Файловый explorer и редактор Monaco",
+          "x": 458,
+          "y": 332,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 386,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 392,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "ИИ-агент: 20+ инструментов и MCP",
+          "x": 458,
+          "y": 388,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 442,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 448,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "Blender, ArtCraft и другие приложения",
+          "x": 458,
+          "y": 444,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        }
+      ]
+    },
+    {
+      "name": "page-license-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "text",
+          "text": "Лицензионное соглашение",
+          "x": 48,
+          "y": 40,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Пожалуйста, прочитайте условия перед установкой.",
+          "x": 48,
+          "y": 82,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 48,
+          "y": 116,
+          "w": 864,
+          "h": 346,
+          "r": 12,
+          "fill": "#1d1d21",
+          "stroke": "#2e2e34",
+          "sw": 1
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode",
+          "x": 72,
+          "y": 140,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Copyright (c) 2026 Misha",
+          "x": 72,
+          "y": 162,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 184,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Это программное обеспечение поставляется «как есть», без каких-либо",
+          "x": 72,
+          "y": 206,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "гарантий — явных или подразумеваемых, включая, но не ограничиваясь,",
+          "x": 72,
+          "y": 228,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "гарантии товарной пригодности, соответствия конкретной цели и",
+          "x": 72,
+          "y": 250,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "отсутствия нарушений прав. Авторы не несут ответственности за любые",
+          "x": 72,
+          "y": 272,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "претензии, убытки или иные обязательства.",
+          "x": 72,
+          "y": 294,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 316,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Устанавливая приложение, вы соглашаетесь, что оно отправляет ваши",
+          "x": 72,
+          "y": 338,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "запросы к чату выбранному в его настройках ИИ-провайдеру, используя",
+          "x": 72,
+          "y": 360,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "ваши собственные API-ключи.",
+          "x": 72,
+          "y": 382,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 404,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Я принимаю условия лицензионного соглашения",
+          "x": 48,
+          "y": 490,
+          "size": 13,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        }
+      ]
+    },
+    {
+      "name": "page-dir-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "text",
+          "text": "Папка установки",
+          "x": 48,
+          "y": 40,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Выберите режим установки и папку.",
+          "x": 48,
+          "y": 82,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Папка:",
+          "x": 48,
+          "y": 258,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 48,
+          "y": 288,
+          "w": 740,
+          "h": 44,
+          "r": 10,
+          "fill": "#1d1d21",
+          "stroke": "#33333a",
+          "sw": 1
+        }
+      ]
+    },
+    {
+      "name": "page-finish-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 222,
+          "rx": 155,
+          "ry": 155,
+          "color": "#58c07c2b"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 380,
+          "y": 122,
+          "w": 200,
+          "h": 200
+        },
+        {
+          "t": "text",
+          "text": "Готово!",
+          "x": 480,
+          "y": 342,
+          "size": 30,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode установлен. Приятной работы!",
+          "x": 480,
+          "y": 396,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    },
+    {
+      "name": "page-unconfirm-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 155,
+          "rx": 115,
+          "ry": 115,
+          "color": "#e5484d1f"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 410,
+          "y": 85,
+          "w": 140,
+          "h": 140
+        },
+        {
+          "t": "text",
+          "text": "Удалить RelaxCode?",
+          "x": 480,
+          "y": 268,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "Приложение и его компоненты будут удалены",
+          "x": 480,
+          "y": 316,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "с этого компьютера.",
+          "x": 480,
+          "y": 340,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    },
+    {
+      "name": "page-unfinish-ru.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 185,
+          "rx": 125,
+          "ry": 125,
+          "color": "#58c07c20"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 420,
+          "y": 128,
+          "w": 120,
+          "h": 120
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode удалён",
+          "x": 480,
+          "y": 292,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "Спасибо, что пользовались RelaxCode.",
+          "x": 480,
+          "y": 340,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    },
+    {
+      "name": "page-welcome-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "grad",
+          "x": 0,
+          "y": 0,
+          "w": 360,
+          "h": 564,
+          "from": "#1d1d21",
+          "to": "#17171a"
+        },
+        {
+          "t": "line",
+          "x1": 360,
+          "y1": 0,
+          "x2": 360,
+          "y2": 564,
+          "color": "#2e2e34",
+          "sw": 1
+        },
+        {
+          "t": "glow",
+          "cx": 180,
+          "cy": 310,
+          "rx": 150,
+          "ry": 150,
+          "color": "#7a6eff24"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\icon-256.png",
+          "x": 48,
+          "y": 48,
+          "w": 84,
+          "h": 84
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode",
+          "x": 148,
+          "y": 74,
+          "size": 22,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 65,
+          "y": 195,
+          "w": 230,
+          "h": 230
+        },
+        {
+          "t": "text",
+          "text": "v0.2.0",
+          "x": 180,
+          "y": 468,
+          "size": 13,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "Welcome to",
+          "x": 420,
+          "y": 142,
+          "size": 28,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode",
+          "x": 420,
+          "y": 180,
+          "size": 28,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "A desktop IDE with an AI agent: files and",
+          "x": 420,
+          "y": 246,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "commands, web, diagrams and 3D — one window.",
+          "x": 420,
+          "y": 270,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 330,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 336,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "File explorer and Monaco editor",
+          "x": 458,
+          "y": 332,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 386,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 392,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "AI agent: 20+ tools and MCP",
+          "x": 458,
+          "y": 388,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 420,
+          "y": 442,
+          "w": 24,
+          "h": 24,
+          "r": 7,
+          "fill": "#58c07c26",
+          "stroke": "#58c07c59",
+          "sw": 1
+        },
+        {
+          "t": "check",
+          "x": 425,
+          "y": 448,
+          "size": 13,
+          "color": "#58c07c",
+          "sw": 2
+        },
+        {
+          "t": "text",
+          "text": "Blender, ArtCraft and more apps",
+          "x": 458,
+          "y": 444,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#ececf0",
+          "align": "l"
+        }
+      ]
+    },
+    {
+      "name": "page-license-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "text",
+          "text": "License Agreement",
+          "x": 48,
+          "y": 40,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Please read the terms before installing.",
+          "x": 48,
+          "y": 82,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 48,
+          "y": 116,
+          "w": 864,
+          "h": 346,
+          "r": 12,
+          "fill": "#1d1d21",
+          "stroke": "#2e2e34",
+          "sw": 1
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode",
+          "x": 72,
+          "y": 140,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Copyright (c) 2026 Misha",
+          "x": 72,
+          "y": 162,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 184,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "This software is provided \"as is\", without warranty of any kind, express or",
+          "x": 72,
+          "y": 206,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "implied, including but not limited to the warranties of merchantability,",
+          "x": 72,
+          "y": 228,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "fitness for a particular purpose and noninfringement. In no event shall the",
+          "x": 72,
+          "y": 250,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "authors be liable for any claim, damages or other liability.",
+          "x": 72,
+          "y": 272,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 294,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "By installing you agree that the application sends your chat requests to the",
+          "x": 72,
+          "y": 316,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "AI provider you configure in its settings, using your own API keys.",
+          "x": 72,
+          "y": 338,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "",
+          "x": 72,
+          "y": 360,
+          "size": 13,
+          "family": "Manrope",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "I accept the license agreement",
+          "x": 48,
+          "y": 490,
+          "size": 13,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        }
+      ]
+    },
+    {
+      "name": "page-dir-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "text",
+          "text": "Installation Folder",
+          "x": 48,
+          "y": 40,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Choose install mode and folder.",
+          "x": 48,
+          "y": 82,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "text",
+          "text": "Folder:",
+          "x": 48,
+          "y": 258,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "l"
+        },
+        {
+          "t": "round",
+          "x": 48,
+          "y": 288,
+          "w": 740,
+          "h": 44,
+          "r": 10,
+          "fill": "#1d1d21",
+          "stroke": "#33333a",
+          "sw": 1
+        }
+      ]
+    },
+    {
+      "name": "page-finish-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 222,
+          "rx": 155,
+          "ry": 155,
+          "color": "#58c07c2b"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 380,
+          "y": 122,
+          "w": 200,
+          "h": 200
+        },
+        {
+          "t": "text",
+          "text": "All done!",
+          "x": 480,
+          "y": 342,
+          "size": 30,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode has been installed. Enjoy!",
+          "x": 480,
+          "y": 396,
+          "size": 15,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    },
+    {
+      "name": "page-unconfirm-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 155,
+          "rx": 115,
+          "ry": 115,
+          "color": "#e5484d1f"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 410,
+          "y": 85,
+          "w": 140,
+          "h": 140
+        },
+        {
+          "t": "text",
+          "text": "Uninstall RelaxCode?",
+          "x": 480,
+          "y": 268,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "The application and its components",
+          "x": 480,
+          "y": 316,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "will be removed from this computer.",
+          "x": 480,
+          "y": 340,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    },
+    {
+      "name": "page-unfinish-en.bmp",
+      "width": 960,
+      "height": 564,
+      "ops": [
+        {
+          "t": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 960,
+          "h": 564,
+          "fill": "#17171a"
+        },
+        {
+          "t": "glow",
+          "cx": 480,
+          "cy": 185,
+          "rx": 125,
+          "ry": 125,
+          "color": "#58c07c20"
+        },
+        {
+          "t": "img",
+          "src": "D:\\Project\\RelaxCode\\build\\installer\\assets\\mascot-white.png",
+          "x": 420,
+          "y": 128,
+          "w": 120,
+          "h": 120
+        },
+        {
+          "t": "text",
+          "text": "RelaxCode was removed",
+          "x": 480,
+          "y": 292,
+          "size": 26,
+          "family": "Manrope SemiBold",
+          "color": "#ececf0",
+          "align": "c"
+        },
+        {
+          "t": "text",
+          "text": "Thanks for using RelaxCode.",
+          "x": 480,
+          "y": 340,
+          "size": 14,
+          "family": "Manrope Medium",
+          "color": "#9a9aa2",
+          "align": "c"
+        }
+      ]
+    }
+  ]
+}

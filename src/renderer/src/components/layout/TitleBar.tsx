@@ -7,7 +7,10 @@ import { AppLogo } from '@/components/ui/app-logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn, basename } from '@/lib/utils'
 import { useTeamStore } from '@/stores/team'
+import { useChatStore } from '@/stores/chat'
 import { FeedbackDialog } from '@/components/layout/FeedbackDialog'
+import { ModeSwitch } from '@/components/layout/ModeSwitch'
+import { UpdateButton } from '@/components/layout/UpdateButton'
 
 function WindowControlButton({
   label,
@@ -50,6 +53,9 @@ export function TitleBar(): JSX.Element {
   const toggleScreen = useUiStore((s) => s.toggleScreen)
   const openSettings = useUiStore((s) => s.openSettings)
   const workspace = useUiStore((s) => s.workspace)
+  // The chat shell has no editor, file tree or screen dock, so their toggles
+  // would be dead buttons there.
+  const chatShell = useChatStore((s) => s.mode) === 'chat'
   const [maximized, setMaximized] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const t = useT()
@@ -59,20 +65,22 @@ export function TitleBar(): JSX.Element {
   return (
     <header className="no-glass drag flex h-10 shrink-0 select-none items-center justify-between bg-background pl-1.5 pr-1">
       <div className="flex min-w-0 items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleSidebar}
-              aria-label={t('titlebar.toggleSidebar')}
-              className={cn('no-drag text-muted-foreground', sidebarOpen && 'bg-pressed text-foreground')}
-            >
-              <PanelLeft className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('titlebar.toggleSidebar')}</TooltipContent>
-        </Tooltip>
+        {!chatShell && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleSidebar}
+                aria-label={t('titlebar.toggleSidebar')}
+                className={cn('no-drag text-muted-foreground', sidebarOpen && 'bg-pressed text-foreground')}
+              >
+                <PanelLeft className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('titlebar.toggleSidebar')}</TooltipContent>
+          </Tooltip>
+        )}
 
         <div className="flex min-w-0 items-center gap-2 pl-1">
           <AppLogo className="size-6 rounded-md ring-1 ring-black/[0.06] dark:ring-white/10" />
@@ -89,6 +97,9 @@ export function TitleBar(): JSX.Element {
       </div>
 
       <div className="flex items-center gap-1">
+        <ModeSwitch />
+        <UpdateButton />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -104,20 +115,22 @@ export function TitleBar(): JSX.Element {
           <TooltipContent side="bottom">{t('feedback.title')}</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleChat}
-              aria-label={t('titlebar.toggleChat')}
-              className={cn('no-drag text-muted-foreground', chatOpen && 'bg-pressed text-foreground')}
-            >
-              <MessageSquare className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('titlebar.toggleChat')}</TooltipContent>
-        </Tooltip>
+        {!chatShell && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleChat}
+                aria-label={t('titlebar.toggleChat')}
+                className={cn('no-drag text-muted-foreground', chatOpen && 'bg-pressed text-foreground')}
+              >
+                <MessageSquare className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('titlebar.toggleChat')}</TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>
@@ -139,21 +152,23 @@ export function TitleBar(): JSX.Element {
           </TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleScreen}
-              aria-label={t('titlebar.toggleScreen')}
-              data-testid="titlebar-toggle-screen"
-              className={cn('no-drag text-muted-foreground', screenOpen && 'bg-pressed text-foreground')}
-            >
-              <Monitor className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('titlebar.toggleScreen')}</TooltipContent>
-        </Tooltip>
+        {!chatShell && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleScreen}
+                aria-label={t('titlebar.toggleScreen')}
+                data-testid="titlebar-toggle-screen"
+                className={cn('no-drag text-muted-foreground', screenOpen && 'bg-pressed text-foreground')}
+              >
+                <Monitor className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('titlebar.toggleScreen')}</TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>

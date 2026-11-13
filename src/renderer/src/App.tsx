@@ -6,6 +6,7 @@ import { useChatStore, clearStoredChats } from '@/stores/chat'
 import { useTerminalStore } from '@/stores/terminal'
 import { useScreenStore } from '@/stores/screen'
 import { useSettingsStore } from '@/stores/settings'
+import { subscribeUpdates } from '@/stores/updates'
 import { applyAppearance, watchSystemTheme } from '@/lib/appearance'
 import { matchesCombo } from '@/lib/keymap'
 import { useUiBridge } from '@/lib/ui-events'
@@ -15,6 +16,7 @@ import { TitleBar } from '@/components/layout/TitleBar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { EditorArea } from '@/components/layout/EditorArea'
 import { ChatPanel } from '@/components/layout/ChatPanel'
+import { ChatScreen } from '@/components/chat-screen/ChatScreen'
 import { ArenaScreen } from '@/components/arena/ArenaScreen'
 import { useArenaStore } from '@/stores/arena'
 import { useTeamStore } from '@/stores/team'
@@ -39,6 +41,9 @@ export default function App(): JSX.Element {
   const settings = useSettingsStore((s) => s.settings)
   const settingsOpen = useUiStore((s) => s.settingsOpen)
   const usageOpen = useUiStore((s) => s.usageOpen)
+  // A chat conversation is its own window: the project shell is not mounted at
+  // all, so Monaco, the tree and the agent docks cost nothing while talking.
+  const chatShell = useChatStore((s) => s.mode) === 'chat'
   const configured = useRef(false)
   // Main-process requests land here: notifications, opened files, speech,
   // chat export and scheduled prompts.
@@ -58,6 +63,15 @@ export default function App(): JSX.Element {
       if (inSettings) return
       // The usage report swallows the IDE shortcuts while it is open.
       if (useUiStore.getState().usageOpen) return
+      // A conversation has no editor, tree, terminal or screen dock: of the
+      // project shortcuts only "new task" still means something there.
+      if (useChatStore.getState().mode === 'chat') {
+        if (matchesCombo(event, keymap.newChat)) {
+          event.preventDefault()
+          useChatStore.getState().newChat()
+        }
+        return
+      }
       if (matchesCombo(event, keymap.toggleSidebar)) {
         event.preventDefault()
         toggleSidebar()
@@ -197,6 +211,10 @@ export default function App(): JSX.Element {
     })
   }, [])
 
+  // The updater pushes its state from the main process; the title-bar button
+  // appears as soon as a newer release is found.
+  useEffect(() => subscribeUpdates(), [])
+
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useChatStore.getState().loadProcesses()
@@ -223,20 +241,26 @@ export default function App(): JSX.Element {
       <div className="flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
         <TitleBar />
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
-          <Sidebar />
-          <main className="flex min-w-0 flex-1 flex-col">
-            <div className="workspace-shell relative m-2 min-h-0 flex-1 overflow-hidden rounded-[18px]">
-              <EditorArea />
-            </div>
-          </main>
-          <ChatPanel />
-          <ScreenPanel open={screenOpen} />
+          {chatShell ? (
+            <ChatScreen />
+          ) : (
+            <>
+              <Sidebar />
+              <main className="flex min-w-0 flex-1 flex-col">
+                <div className="workspace-shell relative m-2 min-h-0 flex-1 overflow-hidden rounded-[18px]">
+                  <EditorArea />
+                </div>
+              </main>
+              <ChatPanel />
+              <ScreenPanel open={screenOpen} />
+            </>
+          )}
           {settingsOpen && <SettingsScreen />}
           <ArenaScreen />
           <TeamScreen />
           {usageOpen && <UsageScreen />}
         </div>
-        <StatusBar />
+        {!chatShell && <StatusBar />}
       </div>
     </TooltipProvider>
   )

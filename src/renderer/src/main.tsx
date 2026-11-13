@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/manrope'
 import './styles/globals.css'
 import App from './App'
+import { ErrorBoundary } from './components/ui/error-boundary'
 import { TrayMenu } from './components/tray/TrayMenu'
 import { useUiStore } from './stores/ui'
 import { useEditorStore } from './stores/editor'
@@ -33,7 +34,9 @@ if (window.location.hash === '#tray-menu') {
 
   createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>
   )
 }

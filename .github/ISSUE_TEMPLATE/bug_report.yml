@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: Версия RelaxCode и Windows
-      placeholder: RelaxCode 0.2.0, Windows 11
+      placeholder: RelaxCode 0.3.0, Windows 11
     validations:
       required: true
   - type: textarea

@@ -8,7 +8,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border border-input bg-card text-foreground hover:bg-accent active:bg-pressed',
+        default:
+          // Dark theme: the neutral button wears the accent (settings → accent
+          // drives --primary), so it follows white, rose, blue and friends.
+          'border border-input bg-card text-foreground hover:bg-accent active:bg-pressed dark:border-transparent dark:bg-primary dark:text-primary-foreground dark:hover:brightness-110 dark:active:brightness-95',
         primary:
           'border border-transparent bg-primary text-primary-foreground hover:brightness-105 active:brightness-95',
         ghost:
