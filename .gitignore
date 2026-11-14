@@ -4,6 +4,15 @@ dist/
 *.log
 .DS_Store
 .sharrowkin/
+.zcode/
+.freebuff/
+.claude/
+.codex/
+.cursor/
+.gemini/
+.aider/
+.continue/
+.windsurf/
 .env
 .env.*
 *.local

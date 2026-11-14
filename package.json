@@ -101,7 +101,16 @@
       "buildResources": "build"
     },
     "files": [
-      "out/**"
+      "out/**",
+      "!**/.zcode/**",
+      "!**/.freebuff/**",
+      "!**/.claude/**",
+      "!**/.codex/**",
+      "!**/.cursor/**",
+      "!**/.gemini/**",
+      "!**/.aider/**",
+      "!**/.continue/**",
+      "!**/.windsurf/**"
     ],
     "asar": true,
     "icon": "build/icon.ico",
